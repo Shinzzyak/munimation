@@ -19,12 +19,67 @@ Dua video yang dihasilkan dari kerja ini:
 > naskah, VO, audio, script render, dan dokumentasi buat mereproduksi
 > videonya dari nol.
 
+## Yang baru — 25 Nov 2026 (update kedua)
+
+Update ini (commit setelah `a868aa2`) menambah empat hal yang dikerjakan
+siang 25 Nov 2026, semuanya atas perintah Avres:
+
+1. **Skill 3D stickman terinstall** — `claude-3d-animated-shorts/`:
+   thuann-vn/claude-3d-animated-shorts (MIT), fork 3D sejati dari skill 2D
+   mromidev: karakter rigged di atas rig Mixamo Xbot (bukan billboard 2D),
+   bisa di-orbit dan di-pose. Dipilih setelah studi Ricks Clips / DrawnWhy
+   (formula: perbuatan aneh → diejek → bencana → sains + analogi → loop).
+   Install: clone 12 MB → `fetch-assets.sh` (Xbot.glb 2,8 MB, Horse.glb,
+   font Anton + Inter-Black, 28 prop Poly Haven → aset 59 MB) → `npm install`
+   88 paket. Dua patch VM di `engine/render.cjs`: `--no-sandbox` (VM jalan
+   sebagai root) dan `--use-gl=angle --use-angle=swiftshader
+   --enable-unsafe-swiftshader` (flag bawaan `--use-angle=metal` itu macOS,
+   WebGL gagal tanpa ini). Smoke test `npm run still` SELESAI 25 Nov ~12:36:
+   3 still dalam ~27 detik, dibaca visual — karakter big-head stickman +
+   dunia rel + handcar kebaca, bukan blank (bukti di `smoke-test/`). Render
+   video penuh tetap lewat Colab T4/Kaggle. TTS default-nya ElevenLabs
+   berbayar — buat Avres diganti ke Google AI Studio gratis (Zubenelgenubi).
+   Detail: `claude-3d-animated-shorts/NOTE.md`.
+2. **Skill audio-ke-video** — `cartoon-audio-short/`: dari folder Drive
+   `cartoon-short-kit` yang dikirim Avres. Audio masuk → MP4 vertikal jadi:
+   karakter 2D bean-head card di dunia 3D inked, three.js di headless
+   Chromium, TANPA Remotion/GPU, musik + SFX disintesis di 50% level suara.
+   Contoh jadi "The Soldier Who Never Left" (19,7 dtk, 8 shot). Belum
+   diinstall/diuji di VM. Detail: `cartoon-audio-short/NOTE.md`.
+3. **Studi roblox-engine.7z** — `roblox-remotion-study/`: arsip 1 GB dari
+   Drive ternyata BUKAN binary Roblox, melainkan proyek Remotion lengkap
+   `roblox-shorts-engine` v1.0.0 (Remotion 4.0.242, three 0.163) dengan skill
+   `roblox-shorts-director`: satu video = satu file Python (beats, musik,
+   SFX, cast, scene), karakter R6 Roblox, kota persisten 12 lokasi, rule
+   check otomatis. Poin terbesar: **Kokoro TTS LOKAL (ONNX) — gratis, tanpa
+   batas 10 request/hari AI Studio**. 3 contoh MP4 jadi + 5 video referensi
+   di arsip (tidak ikut di repo karena ukuran). Detail:
+   `roblox-remotion-study/STUDY.md`.
+4. **Dua dokumen Google Docs** — `docs/`: "Mark AI Guy — What-If Story
+   Engine" (21.317 karakter: workflow klip 10 detik + end-frame continuity
+   + naskah narator + paket upload) dan "Rick's Clips Master Prompt v3"
+   (8.030 karakter: master prompt produser Shorts, ide HARUS fakta nyata,
+   aturan narasi ketat HOOK/SETUP/DOUBT/ESCALATE/TURN/REVEAL "You see,"/
+   BUTTON). **Ketegangan penting: kedua dokumen menuntut karakter STRICTLY
+   FLAT 2D** — cocok dengan `cartoon-3d-short/` dan `cartoon-audio-short/`,
+   BUKAN skill 3D rigged. Detail: `docs/README.md`.
+
+Yang sengaja TIDAK masuk repo: zip `cartoon-3d-animated-shorts.zip` (18 MB)
+— sudah diverifikasi sebagai duplikat persis `cartoon-3d-short/` yang ada
+di sini; `node_modules/`, `engine/assets/` skill 3D (59 MB, regenerable),
+`upstream-2d/` (duplikat `cartoon-3d-short/`); MP4/ONNX/referensi arsip
+roblox (ukuran + hak cipta pihak ketiga).
+
 ## Isi repo
 
 | Folder | Isi |
 |---|---|
 | `alfatih-study/` | Studi frame-by-frame video referensi @alfatihmotion + transkrip + 58 frame + sampel VO |
 | `cartoon-3d-short/` | Skill animasi 2.5D (three.js + Remotion) yang dipakai, dari mromidev (MIT) |
+| `claude-3d-animated-shorts/` | Skill 3D stickman rigged (Mixamo Xbot) dari thuann-vn (MIT) + NOTE + bukti smoke test |
+| `cartoon-audio-short/` | Skill audio → MP4 vertikal (2D bean-head, tanpa Remotion/GPU) dari folder Drive Avres + NOTE |
+| `roblox-remotion-study/` | Studi roblox-engine.7z: skill roblox-shorts-director + Kokoro TTS lokal + 7 file kunci |
+| `docs/` | Dua dokumen Google Docs: What-If Story Engine + Rick's Clips Master Prompt v3 + ringkasan |
 | `remotion/` | Proyek Remotion: komposisi `BridgeShort` dan `ShipsShort` (source lengkap) |
 | `ships-short/` | Naskah, VO, timing kata, caption, script audio mix, dan script caption burn |
 | `colab-render/` | Script setup + render chunk di Google Colab T4 |
@@ -349,7 +404,7 @@ Session di-stop setelah selesai (`colab stop -s ships`) supaya CU tidak jalan.
 | Bridge test 5 dtk (150 frame) | 0,26 CU | 77,78 (dari 78,04) |
 | Bridge penuh 67,5 dtk (2025 frame) | — (tidak tercatat) | — |
 | ShipsShort v1 (2592 frame) | 1,34 CU | 76,44 |
-| ShipsShort v2 | — (berjalan saat repo ini dibuat) | — |
+| ShipsShort v2 (2592 frame, 5 chunk, ~12,5 mnt) | — (tidak tercatat; CLI tidak punya perintah balance) | — |
 
 ---
 
@@ -427,6 +482,14 @@ Session di-stop setelah selesai (`colab stop -s ships`) supaya CU tidak jalan.
 
 - Skill animasi: [mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts)
   (MIT) — lihat `cartoon-3d-short/NOTE.md`.
+- Skill 3D: [thuann-vn/claude-3d-animated-shorts](https://github.com/thuann-vn/claude-3d-animated-shorts)
+  (MIT) — lihat `claude-3d-animated-shorts/NOTE.md`.
+- Skill audio-ke-video: folder Drive `cartoon-short-kit` dari Avres —
+  lihat `cartoon-audio-short/NOTE.md`.
+- Studi Roblox: arsip `roblox-engine.7z` dari link Drive Avres —
+  lihat `roblox-remotion-study/STUDY.md`.
+- Dokumen cerita: "Mark AI Guy — What-If Story Engine" dan
+  "Rick's Clips Master Prompt v3" (Google Docs) — lihat `docs/README.md`.
 - Referensi gaya: [@alfatihmotion](https://www.threads.com/@alfatihmotion),
   "Seri Al-Fatih — Meriam Raksasa".
 - Validasi skill yang sama di Threads: [@zainalsalamun](https://www.threads.com/@zainalsalamun)
