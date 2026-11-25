@@ -37,6 +37,27 @@ dipakai buat engine ini). Verdict 10 frame lawan v2: **v3 menang 4, seri 6,
 v2 menang 0** — pertama kalinya v2 tidak menang satu frame pun. Detail:
 `claude-3d-animated-shorts/SHIPS-FILM.md` (bagian Upgrade v3).
 
+### Update keempat — film 3D v4, asset-first + hybrid test (25 Nov 2026 malam)
+
+Setelah v3, Avres protes lagi (jangkrik siang, armada bentuknya tetap,
+rantai di pinggir pantai, tembok + prajurit masih kalah dari v2) dan
+ngasih dua ide proses: gabungin Remotion + 3D, dan bikin aset dulu
+sebelum render. **Fase 1 asset-first: 6/6 GO** — varian hull armada 4
+bentuk baru yang beneran beda, rantai pindah ke air terbuka (CHAIN_Z
+85, komposisi v2), prajurit skala 1,45 + muka baru di main.js (alis di
+bawah rim steel cap), skyline lebih rapat, map clearance ~137 px (v3
+cuma 19 px). Audio fix: jangkrik mati setelah 6,5 detik, burung pagi
+masuk dari fajar — `mix-v2.wav`, −15,08 LUFS, band jangkrik siang jatuh
+−41,81→−52,50 dBFS. **Hybrid test NO-GO, terbukti:** kamera kedua
+pipeline beda ~11° (rel geser 150–250 px, tangan ngoles papan kosong)
+dan background v2 udah berisi pekerja lukis di posisi yang sama (kepala
+dobel) — benerinnya butuh render ulang background + audit kamera semua
+shot, bukan jalan pintas. **Fase 2 full-3D:** QA GO tanpa fix round,
+render 4 lane Colab T4 (~0,15 dtk/frame, ~6 menit). Verdict 10 frame
+lawan v2: **v4 menang 7, seri 3, v2 menang 0** — lebih kuat dari v3
+(4-6-0). Detail: `claude-3d-animated-shorts/SHIPS-FILM.md` (bagian
+Upgrade v4).
+
 Update ini (commit setelah `a868aa2`) menambah empat hal yang dikerjakan
 siang 25 Nov 2026, semuanya atas perintah Avres:
 

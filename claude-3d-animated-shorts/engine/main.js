@@ -34,7 +34,9 @@ const talking = (li, t, a = -1, b = 1e9) => FL[li].words.some(w => w.t >= a && w
 
 // ---------- renderer, light ----------
 const canvas = document.createElement('canvas'); canvas.width = WW; canvas.height = HH; document.body.appendChild(canvas);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+const ALPHA = Q.has('alpha');   // HYBRID TEST v4 (2026-11-25): transparent character-only pass — alpha renderer, no post chain (it kills alpha), world hidden per frame, PNG out of window.frame
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true, alpha: ALPHA });
+if (ALPHA) renderer.setClearColor(0x000000, 0);
 renderer.setSize(WW, HH, false); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(45, WW / HH, 0.03, 6000);
 const hemi = new THREE.HemisphereLight('#cfe4ff', '#8fb86a', 1.25); scene.add(hemi);
@@ -43,6 +45,7 @@ const SUNDIR = V(-0.45, 0.75, 0.48).normalize();
 const SR = await makeStickRig(scene, './assets/rigs/Xbot.glb'); SR.setInkRes(WW, HH);
 const W = buildWorld(scene, SR);
 const post = makePost({ renderer, scene, camera, W: WW, H: HH });
+if (ALPHA) post.render = () => renderer.render(scene, camera); // HYBRID TEST v4: bypass composer — DOF/bloom/grade/SMAA would destroy the alpha channel; grade is redone in ffmpeg at composite time
 const U = post.grade.uniforms;
 const DUSK = { exp: 1.0, sat: 1.0, warm: 0.12, teal: 0.2, con: 1.1, sun: '#ffaf80', si: 2.6, hemi: 1.15, dir: V(-0.72, 0.2, 0.62), mul: [1.02, 0.95, 1.0], fog: '#a08fa6', rim: '#ff9a6a' };
 // bright cartoon day like the "Nghe tàu tới" test (owner 2026-11-10: "làm lại màu sắc theo cái này"); DUSK kept for reference
@@ -77,6 +80,12 @@ const FACES = {
   talk: g => { cheeks(g, 0.22); dots(g); brows(g, 0.05); nose(g); mOpen(g, 52, 62, 195, false); },
   wide: g => { cheeks(g, 0.15); ringEyes(g, 20); brows(g, -0.5, -150, 34); mO(g, 26, 235); },
   shout: g => { cheeks(g, 0.35); dots(g, 0, 0, 0.85); brows(g, 0.7, -108); mOpen(g, 95, 115, 175); },
+  // v4 guard moods (ships.js shot 8 only): the steel cap's rim sits at face-space
+  // y≈-130, so the standard brows (y -108..-150) hide under it and the eye dots
+  // (~1 px at 540w) never read. These sit BELOW the cap rim (brows y -70) and are
+  // ~40% bigger everywhere: ring eyes 95x110 + pupil 30, dots x1.4, mouths +20%.
+  wideG: g => { cheeks(g, 0.15); for (const sd of [-1, 1]) { g.fillStyle = WH; g.strokeStyle = IK; g.lineWidth = 26; g.beginPath(); g.ellipse(sd * EX, -6, 95, 110, 0, 0, 7); g.fill(); g.stroke(); g.fillStyle = PU; g.beginPath(); g.arc(sd * EX, 0, 30, 0, 7); g.fill(); } brows(g, -0.5, -70, 52); mO(g, 36, 235); },
+  shoutG: g => { cheeks(g, 0.35); dots(g, 0, 0, 1.4); brows(g, 0.7, -70, 52); mOpen(g, 115, 135, 175); },
   listen: g => { cheeks(g, 0.2); lidEyes(g); brows(g, 0.5, -84); nose(g); mFlat(g, 34); },
   serious: g => { cheeks(g, 0.18); lidEyes(g); brows(g, 0.45, -88); nose(g); mFlat(g, 50); },
   serioust: g => { cheeks(g, 0.18); lidEyes(g); brows(g, 0.45, -88); nose(g); mOpen(g, 45, 48, 200, false); },
@@ -519,7 +528,22 @@ if (Q.has('chase')) { SHOTS.length = 0;
   // 8–10 s: on the roof, waving his hat, camera rising and pulling back; the other two still galloping alongside
   shot(8, (t) => { actors(t); const z = zf(t) + COACH[0] + 2.5, u = clamp((t - 8) / 2); look(V(lerp(5, 9, u), lerp(5.2, 8.0, u), z + lerp(6, 9, u)), V(0.6, 4.2, z - 1.5), 44); shadowR = 20; focus = V(1, 3, z); });
 }
-if (Q.has('ships')) { SHOTS.length = 0; buildShipsFilm({ THREE, scene, camera, SR, hemi, sun, SUNDIR, WW, HH, clamp, ease, eio, lerp, V, vl, look, dof, shot, place, idle, face, headC, yawTo, arm, leg, pointAt, wave1, waveArms, hips, headTurn, dirW, LEFT, pull, base, LOOKS, setLook, setShadowR: v => { shadowR = v; }, setLift: v => { U.uLift.value.set(...v); } }); }
+if (Q.has('ships')) { SHOTS.length = 0; buildShipsFilm({ THREE, scene, camera, SR, hemi, sun, SUNDIR, WW, HH, clamp, ease, eio, lerp, V, vl, look, dof, shot, place, idle, face, headC, yawTo, arm, leg, pointAt, wave1, waveArms, hips, headTurn, dirW, LEFT, pull, base, LOOKS, setLook, setShadowR: v => { shadowR = v; }, setLift: v => { U.uLift.value.set(...v); }, shot10LookX: Q.has('look0') ? 0 : undefined }); }
+// HYBRID TEST v4 alpha mode: hide every non-character object every frame (shots re-show clouds/chest via lookSetup/begin), keep lights + a ShadowMaterial catcher under the shot-10 worker so his contact shadow survives without the ground.
+let catcher = null;
+if (ALPHA) {
+  catcher = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.35 }));
+  catcher.rotation.x = -Math.PI / 2 - 0.307; // hill slope at z=-40 is +0.317 (ground rises toward +z)
+  catcher.position.set(1.6, 13.03, -40); // worker[0] greases at (1.6, hillY(-40)=13, -40)
+  catcher.receiveShadow = true; scene.add(catcher);
+}
+function hideWorld() {
+  const keep = new Set([catcher]);
+  const addTree = o => { if (!o) return; let p = o; while (p) { keep.add(p); p = p.parent; } o.traverse?.(x => keep.add(x)); };
+  const addCast = list => list.forEach(c => { addTree(c.root); (c.dyn || []).forEach(d => d.mesh && addTree(d.mesh)); Object.values(c._nd || {}).forEach(n => n.m && addTree(n.m)); });
+  addCast(ALL); addCast(window.__shipCast || []);
+  scene.traverse(o => { if (!keep.has(o) && !o.isLight) o.visible = false; });
+}
 SHOTS.sort((a, b) => a.t0 - b.t0); if (Q.has('cut10')) { const cut = SHOTS.findIndex(x => x.t0 >= 9.4); if (cut > 0) SHOTS.length = cut; }
 
 // ---------- 2D overlay: one-word captions, cards, labels ----------
@@ -553,10 +577,11 @@ function resetScene() { for (const o of TRANS) o.visible = false; ALL.forEach(c 
 function renderShot(S, t) { resetScene(); setLook(S.look || 'day'); S.fn(t); ALL.forEach(c => SR.updateLimbs(c)); fireSteam(t); W.update(t, focus);
   const f = focus.clone(); sun.target.position.copy(f); sun.position.copy(f).addScaledVector(SUNDIR, 60); const sc = sun.shadow.camera; sc.left = sc.bottom = -shadowR; sc.right = sc.top = shadowR; sc.near = 1; sc.far = 140; sc.updateProjectionMatrix();
   post.bokeh.enabled = !!dofOn; if (dofOn) { post.bokeh.uniforms.focus.value = dofOn[0]; post.bokeh.uniforms.aperture.value = dofOn[1]; }
-  U.uTime.value = t; post.render(); }
+  U.uTime.value = t; if (ALPHA) hideWorld(); post.render(); }
 const XF = 0;   // hard cuts: dissolves showed one head through another (user 2026-11-10)
 function render(t) {
   let i = 0; for (let k = 0; k < SHOTS.length; k++) if (t >= SHOTS[k].t0) i = k; const S = SHOTS[i];
+  if (ALPHA) { renderShot(S, t); return canvas.toDataURL('image/png'); } // HYBRID TEST v4: raw WebGL canvas as PNG (alpha kept), no 2D overlay
   og.clearRect(0, 0, WW, HH);
   if (i > 0 && t < S.t0 + XF) { renderShot(SHOTS[i - 1], t); og.drawImage(canvas, 0, 0); renderShot(S, t); og.globalAlpha = (t - S.t0) / XF; og.drawImage(canvas, 0, 0); og.globalAlpha = 1; }
   else { renderShot(S, t); og.drawImage(canvas, 0, 0); }

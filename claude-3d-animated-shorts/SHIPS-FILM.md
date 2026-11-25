@@ -167,13 +167,91 @@ masih ~40% frame (sekarang bertekstur). Muka prajurit masih kalah ekspresi
 dari v2 (mata titik, tanpa alis — alis butuh tekstur muka di main.js, di
 luar aturan ships.js saja).
 
+## Upgrade v4 — asset-first + 4 protes Avres + hybrid test NO-GO (25 Nov 2026, malam)
+
+Setelah v3 (4-6-0), Avres protes lagi: kenapa kekurangan yang sudah
+dicatat jujur tidak sekalian dibenerin, plus jangkrik bunyi siang-siang,
+armada bentuknya tetap, rantai di pinggir pantai buat apa, tembok +
+prajurit masih bagusan v2. Dua ide proses dari dia: gabungin Remotion +
+3D (hybrid), dan bikin aset dulu sebelum render (asset-first). Scope
+round ini DIBUKA (koreksi dari kesalahan me di v3 yang membatasi ke
+ships.js saja): main.js boleh disentuh untuk tekstur muka.
+
+**Fase 1 — asset sheet (6/6 GO, QA independen, sebelum render film):**
+ships.js 1260 → ~1310 baris + main.js 2 baris (mood `wideG`/`shoutG`).
+
+1. **Varian hull armada (BARU):** `hullOutlineV` — 4 bentuk baru (A
+   long-narrow, B tubby, C high-bow, D slim), benar-benar beda bentuk,
+   bukan HULL_GEO yang sama (itu kesalahan v3: bentuknya tidak berubah
+   sama sekali, cuma dandanan).
+2. **Rantai, komposisi baru:** CHAIN_Z 70→85 — rantai di air terbuka,
+   tembok 25 m di belakang, air di dua sisi (komposisi v2 f465), bukan
+   garis air mepet pantai. Kamera CU rantai di z=75,5 y=4,5 (di atas air).
+   Fleet Horn (z 70–104) terbagi rantai: z 70–85 sisi dekat, z 86–104
+   sisi jauh; shot 9 segmen kedua menyaring z≥86. Fleet disembunyikan
+   selama CU rantai (shot 3, 8, 9) — disengaja, seperti v2.
+3. **Prajurit (f1500):** skala CU 1,25→1,45; mood baru `wideG`/`shoutG`
+   di main.js (alis di y=−70, di bawah rim steel cap — itu penyebab alis
+   v3 tidak pernah kelihatan); shadeQuad 0,30/0,32→0,42/0,45. Alis hanya
+   jelas di 2 prajurit teriak — klaim "alis kebaca di kelima prajurit"
+   ditolak QA. Wajah v4 lebih terbaca dari v2 f1500.
+4. **Skyline:** baris rumah ke-5 (z=192), 2 kubah + 2 menara tambahan,
+   26 cemara. Lebih rapat dari v3; masih di bawah kerapatan line-art v2
+   (batas gaya engine).
+5. **Map card (f1140):** BOSPORUS y1670→1560; strip bawah 1750→1660.
+   Clearance label→caption ~137 px (klaim 141 ✓ diukur QA), bukan 19 px
+   seperti v3. Garis rute bersih dari angka "10 km".
+6. **Kapal utama:** tiang/layar tergulung/bendera/stern castle kebaca
+   dekat + jauh (sisi lambung dari dekat masih bidang cokelat polos,
+   bawaan v3).
+
+**Audio fix (bug dari me):** `ships_audio.py` jangkrik jalan 0–46 dtk
+padahal flash fajar di 6,5 dtk. Fix: jangkrik 0–6,5 dtk + fade-out
+5,5–6,5 dtk; burung pagi masuk dari 6,5 dtk. Output `mix-v2.wav` (86,4
+dtk, −15,08 LUFS, −1,20 dBTP): band jangkrik siang 7–46 dtk jatuh
+−41,81→−52,50 dBFS, terverifikasi mati. `mix.wav` v1 tidak ditimpa.
+
+**Hybrid test — NO-GO (terbukti, bukan asumsi):** shot f1900 worker
+close-up, background dari `ships-final-v2.mp4`, karakter 3D transparent
+pass (`render-alpha.cjs` baru, alpha renderer, 111 frame, ~0,5 dtk/frame
+lokal), composite ffmpeg + satu grade pass. Dua bukti: (1) kamera beda
+~11° yaw (look x 0 vs 1,2) — rel geser 150–250 px, tangan pekerja
+ngoles papan kosong, lewat kamera v2 asli pekerja 95% keluar frame;
+(2) background v2 paruh kedua sudah berisi pekerja lukis di posisi sama
+→ 4 kepala bertumpuk. Memperbaiki hybrid menuntut render ulang
+background Remotion tanpa karakter + audit kamera semua shot + samakan
+skala — bukan jalan pintas. Fase 2 tetap FULL-3D. Transparent pass
+tetap berguna untuk composite di masa depan (murah, sudah terbukti).
+
+**Fase 2 — film + render:** film check + stills QA 12 shot GO tanpa fix
+round (10 frame vs v3: menang 2 — f465 rantai, f1140 map; seri 8; kalah
+0; frame lindung tidak regresi). Render 4 lane Colab T4 (akun 1–4,
+~648 frame/lane, ~0,15 dtk/frame, total ~6 menit; Kaggle TIDAK dipakai
+— mati). Staging dari tarball skill dir (repo masih ships.js v2).
+Output: `ships-3d-v4.mp4` (86,4 dtk, 1080×1920, 72 MB), caption burn
+62 frasa + mux `mix-v2.wav` (BUKAN mix.wav). Verdict 10 frame lawan v2:
+**v4 menang 7 (f230, f300, f1140, f1225, f1500, f1900 BESAR, f2300
+BESAR), seri 3 (f75, f465, f2500), v2 menang 0** — lebih kuat dari v3
+(4-6-0). Me baca sendiri 4 frame dari file jadi: f465 (rantai
+membentang di air terbuka, tembok di belakang — komposisi v2 beneran;
+mata rantai tipis, dari jauh bisa kebaca garis), f1140 (BOSPORUS jauh
+di atas zona caption, "10 km" bersih dari garis rute), f1500 (kelima
+prajurit menghadap kamera, mata+mulut kebaca, satu teriak sambil
+melambai, bayangan diagonal jelas — jelas lebih baik dari v2), f2300
+(armada penuh: layar krem tebal + bendera merah + wake di air biru,
+matahari utuh; hull dari angle atas-jauh masih sederhana, varian haluan
+melemah di jarak ini — tapi kebaca kapal, bukan kotak).
+
+Catatan jujur: f75 hull v4 masih agak kotak dari sudut rendah; f465
+rantai tipis; f2500 layout poll v2 sedikit lebih bersih; grade siang v2
+di beberapa shot masih terasa lebih "lukis" vs v4 lampu real-time — tapi
+di 10 frame ini tidak ada satu pun yang membuat v2 menang.
+
 ## Catatan yang diketahui (bukan blocker)
 
-- Map card (f1140): TERBUKTI dari video render v3 — overlap hilang
-  (BOSPORUS + caption "dari pesisir Bosporus" dua-duanya kebaca utuh, tanpa
-  tabrakan glif), tapi clearance praktis NOL: caption menempel tepat di
-  tepi bawah bilah biru. Garis rute masih menyentuh angka "1" di "10 km"
-  (pre-existing, sama seperti 3D v2).
+- Map card (f1140): TERBUKTI dari video render v4 — clearance label→
+  caption ~137 px, zona caption hitam bersih, garis rute tidak
+  menyentuh angka "10 km". Catatan v3 (clearance NOL) SUDAH SELESAI.
 - f2300: matahari sudah utuh di tengah langit (discOv, v3); strip bayangan
   tipis di tepi kanan terjauh tidak lagi jadi catatan di grade GPU Colab.
 - Stills bukti v3: `ships-stills/` (tambah di update ini bila ada); QA:
