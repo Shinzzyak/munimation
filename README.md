@@ -58,6 +58,30 @@ lawan v2: **v4 menang 7, seri 3, v2 menang 0** — lebih kuat dari v3
 (4-6-0). Detail: `claude-3d-animated-shorts/SHIPS-FILM.md` (bagian
 Upgrade v4).
 
+### Update kelima — film 3D v5, aturan studi gerakan (26 Nov 2026 dini hari)
+
+Avres protes v4 dengan 2 video referensi baru (Cerita Pos Ronda + Al-Fatih
+Meriam): kapal ngapung vs kapal ditarik masih beda desain, dan Sultan
+terang kayak matahari. Keduanya benar — armada v4 cuma hull + tiang +
+layar + bendera (tanpa deck/castle/rigging kapal utama), turban Sultan
+#f4f1ea flat di atas bukit gelap. V5 ditahan dulu: studi gerakan
+per-frame dari kedua video (`research/movement-study/MOVEMENT-STUDY.md`),
+baru gas. Temuan: pose-to-pose, kamera yang bergerak, satu gerakan tegas
+per shot; muka selalu ada sisi gelap (Pos Ronda: nol frame muka putih
+datar dari 219 frame); lengan nunjuk itu snap ~150–225°/detik + hold;
+crowd = pose statis instanced, kamera yang bergerak. **v5 (R1–R12):**
+turban gelap + gradient + rimfix (kepala bukan lagi benda paling terang
+di f700), nunjuk snap + hard cut, pekerja condong statis + dolly-out,
+armada detail kit sama kayak kapal utama (kastel + jendela + rigging —
+dibuktikan dari kamera consequence), sapi berbentuk, garis rute peta
+tergambar, caption karaoke merah kata-per-kata (184 kartu), musik mati
+di beat rantai + reveal armada (`mix-v3.wav`, −15,08 LUFS). Render 4 lane
+Colab T4 (lane 4 gagal, chunk dialihkan ke lane 1; Kaggle mati). Verdict
+10 frame lawan v2: **v5 menang 6, seri 3, v2 menang 1 (f465 rantai —
+satu-satunya komplain yang belum tuntas)**; lawan v4: lebih baik 3
+(f700, f1225, f2300), lebih buruk 0. Detail:
+`claude-3d-animated-shorts/SHIPS-FILM.md` (bagian Upgrade v5).
+
 Update ini (commit setelah `a868aa2`) menambah empat hal yang dikerjakan
 siang 25 Nov 2026, semuanya atas perintah Avres:
 

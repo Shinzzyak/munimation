@@ -86,6 +86,9 @@ const FACES = {
   // ~40% bigger everywhere: ring eyes 95x110 + pupil 30, dots x1.4, mouths +20%.
   wideG: g => { cheeks(g, 0.15); for (const sd of [-1, 1]) { g.fillStyle = WH; g.strokeStyle = IK; g.lineWidth = 26; g.beginPath(); g.ellipse(sd * EX, -6, 95, 110, 0, 0, 7); g.fill(); g.stroke(); g.fillStyle = PU; g.beginPath(); g.arc(sd * EX, 0, 30, 0, 7); g.fill(); } brows(g, -0.5, -70, 52); mO(g, 36, 235); },
   shoutG: g => { cheeks(g, 0.35); dots(g, 0, 0, 1.4); brows(g, 0.7, -70, 52); mOpen(g, 115, 135, 175); },
+  // v5 R6: mata melotot besar + keringat (tiruan beat 76,5 dtk Pos Ronda) — mata/brows
+  // sama besarnya dengan wideG (di bawah rim topi baja), mulut terbuka + tetes keringat.
+  shockG: g => { cheeks(g, 0.35); for (const sd of [-1, 1]) { g.fillStyle = WH; g.strokeStyle = IK; g.lineWidth = 26; g.beginPath(); g.ellipse(sd * EX, -6, 95, 110, 0, 0, 7); g.fill(); g.stroke(); g.fillStyle = PU; g.beginPath(); g.arc(sd * EX, 0, 30, 0, 7); g.fill(); } brows(g, -0.5, -70, 52); mOpen(g, 115, 135, 175); sweat(g); },
   listen: g => { cheeks(g, 0.2); lidEyes(g); brows(g, 0.5, -84); nose(g); mFlat(g, 34); },
   serious: g => { cheeks(g, 0.18); lidEyes(g); brows(g, 0.45, -88); nose(g); mFlat(g, 50); },
   serioust: g => { cheeks(g, 0.18); lidEyes(g); brows(g, 0.45, -88); nose(g); mOpen(g, 45, 48, 200, false); },

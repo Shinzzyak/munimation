@@ -247,6 +247,91 @@ rantai tipis; f2500 layout poll v2 sedikit lebih bersih; grade siang v2
 di beberapa shot masih terasa lebih "lukis" vs v4 lampu real-time — tapi
 di 10 frame ini tidak ada satu pun yang membuat v2 menang.
 
+## Upgrade v5 — aturan studi gerakan + 2 protes Avres (26 Nov 2026, dini hari)
+
+Setelah v4, Avres kirim 2 video lagi (Cerita Pos Ronda 109 dtk — channel
+lain, pos ronda kayu malam, lampu pijar hangat — dan video Al-Fatih
+Meriam yang asli) dan protes: (1) kapal ngapung vs kapal ditarik masih
+beda desain — benar, armada v4 cuma hull + tiang + layar + bendera
+(ships.js ~849–853), tanpa deck/castle/rigging kapal utama; varian
+outline v4 tidak kelihatan dari kamera consequence (atas, jauh), yang
+kelihatan cuma atas hull pelat datar; (2) Sultan terang kayak matahari —
+benar, turban #f4f1ea flat2 + kepala putih di atas bukit hijau gelap +
+langit abu-abu (f700 v4) = kepala jadi benda paling terang di frame.
+**V5 ditahan dulu atas perintah Avres: studi gerakan per-frame dulu**
+dari Pos Ronda + Al-Fatih, baru gas. Studi: `research/movement-study/`
+(MOVEMENT-STUDY.md, 4 agen; parent baca sendiri sintesis + 3 frame).
+
+**Temuan studi (terukur):** Pos Ronda 31 shot/109 dtk (rata-rata 3,0
+dtk), kamera 24 statis vs 7 bergerak, pan lateral antar pembicara
+0,4–0,7 dtk (13×), 1 pose per shot dialog, mulut swap ~1/0,6 dtk,
+kepala cuma miring (roll, max ~35–40°), nol walk cycle, muka selalu ada
+sisi gelap (gradasi 13–77 poin luminance, muka paling terang ~115/255,
+nol frame muka putih datar dari 219 frame). Al-Fatih: lengan Sultan
+nunjuk snap ~150–225°/dtk + hold 0,4 dtk + 2 hard cut; crowd ~100
+pekerja = pose statis instanced, yang bergerak cuma kamera (crane-up,
+framing melebar ~15–20%/dtk); ledakan meriam tidak pernah divisualkan
+(terjadi di dalam cut); garis rute peta tergambar ~25–30%/dtk.
+Prinsip bersama: pose-to-pose, kamera yang bergerak, satu gerakan tegas
+per shot, yang diam itu mayoritas frame.
+
+**Implementasi R1–R12 (ships.js 1358→1504 baris, main.js +3 mood
+`shockG`):**
+- R1 Sultan: turban #f4f1ea → krem hangat lebih gelap + gradient;
+  rimfix setelah QA (rim 0,35→0,2, satu baris): turban mean 80,7 vs
+  langit 196,0 di f700 — kepala bukan lagi benda paling terang.
+  (Koreksi jujur: klaim build "gradasi 88,2 poin" SALAH — ukur
+  independen ~2 poin; yang terbukti adalah turban tidak lagi bersinar.)
+- R2 Gestur nunjuk = snap ~150–225°/dtk + hold ~0,4 dtk + 2 hard cut
+  ke two-shot; R3 kamera Sultan pan 0,4–0,7 dtk saat ganti pembicara.
+- R4 Pekerja condong statis + kamera dolly-out/crane-up ~1,4 dtk;
+  R5 mulut swap per kata ~0,6 dtk; R6 ekspresi besar = insert 1–2 dtk
+  (shockG prajurit tengah tidak terbedakan dari wideG di ukuran normal
+  — tetes keringat sub-piksel).
+- R7 Kamera armada crane-up + pull-back ~15–20%/dtk; R8 armada =
+  detail kit SAMA dengan kapal utama (instanced deck + stern castle +
+  3 jendela + rigging) — inti protes; dibuktikan dari kamera
+  consequence di still QA hires SEBELUM render film.
+- R9 Sapi berbentuk (barrel + punuk + kaki + tanduk), satu pose statis.
+- R10 Map: dissolve + garis rute tergambar ~25–30%/dtk + kartu diam
+  ~2 dtk.
+- R11 Caption karaoke kata-per-kata (keputusan Avres): 184 kartu dari
+  words.json, kapital MERAH + outline putih, median 0,34 dtk/kartu
+  (`burn_captions_v5.py` baru).
+- R12 Musik mati di beat tegang (keputusan Avres): musik bed dimatikan
+  15,5–18,67 dtk (rantai) dan 50,0–56,67 dtk (reveal armada).
+  Output `mix-v3.wav` (86,4 dtk, −15,08 LUFS, TP −1,39 dBTP; di luar
+  jendela identik dengan mix-v2, maks 0,014 dB). `mix-v2.wav` tidak
+  ditimpa.
+
+**Render:** 4 lane Colab T4; lane 4 GAGAL (speedtest macet >12 menit),
+chunk 4 dialihkan ke lane 1 (pola v2) — selesai 101 dtk. Chunk
+0,147–0,179 dtk/frame. Sesi akhir 0 aktif. Kaggle tidak dipakai.
+Output: `ships-3d-v5.mp4` (86,4 dtk, 1080×1920, 79 MB), caption burn
+184 kartu + mux `mix-v3.wav`.
+
+**Verdict 10 frame lawan v2: v5 menang 6 (f230, f300, f1225 BESAR,
+f1500, f1900, f2300 BESAR), seri 3 (f75, f1140, f2500), v2 menang 1
+(f465).** Koreksi: render agent menulis header "7-2-1" tapi tabelnya
+sendiri 6-3-1 — tally benar 6-3-1. Lawan v4: lebih baik 3 (f700 turban
+krem, f1225 sapi barrel, f2300 detail kit kebaca di full-res), sama 7,
+lebih buruk 0; frame lindung nol regresi. Me baca sendiri 4 frame dari
+file jadi: f700 PASS (turban krem hangat, kepala tidak bersinar —
+protes Sultan SELESAI), f2300 PASS (kastel + 3 jendela + deck + tiang +
+layar + bendera + rigging kelihatan dari kamera consequence — protes
+utama SELESAI), f1225 PASS (sapi barrel + kaki + ujung tanduk, bukan
+kotak), f465 kalah diakui (rantai mata interlocked benar, tapi tipis/
+kecil di frame; v2 mata besar lebih kebaca — satu-satunya dari 4
+komplain Avres yang belum tuntas).
+
+Catatan jujur: f465 butuh mata rantai lebih besar/tebal atau framing
+lebih dekat di ronde berikut; rim turban masih jadi piksel paling terang
+di f700 (maks 235 vs langit 222) — di frame penuh terbaca sebagai rim
+light, tapi di layar besar masih bisa memicu protes yang sama (langkah
+berikut bila perlu: relight daylight ala v2); shot 33,5 dtk (warisan
+v4): close deck kapal malam tanpa penarik di frame — beat "ditarik naik
+bukit" tetap lemah.
+
 ## Catatan yang diketahui (bukan blocker)
 
 - Map card (f1140): TERBUKTI dari video render v4 — clearance label→

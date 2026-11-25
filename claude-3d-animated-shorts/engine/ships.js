@@ -64,7 +64,7 @@ const backOut = x => { x = Math.min(1, Math.max(0, x)); const c = 1.7; return 1 
 // ---------- module state (set by buildShipsFilm) ----------
 let C = null; // ctx from main.js
 let skyU = null, cloudsG = null, sunDisc = null, fill = null, snapKey = null;
-let leadShip = null, fleetHulls = [], fleetRims = [], fleetMast = null, fleetSail = null, fleetFlag = null, fleetWake = null, fleet = [];
+let leadShip = null, fleetHulls = [], fleetRims = [], fleetMast = null, fleetSail = null, fleetFlag = null, fleetWake = null, fleetDetail = [], fleet = [];
 let oxenG = null, oxen = [], torchesG = null, dustG = null, dust = [], chestG = null, ropeG = null, ropes = [];
 let sultan = null, advisor = null, workers = [], guards = [];
 const SHIPCAST = []; const prevVisible = new Set();
@@ -88,6 +88,21 @@ const strut = (a, b, r, mat) => {
 function merged(parts, mat, shadow = true) { // parts: [geometry, matrix4][]
   const mesh = new THREE.Mesh(mergeGeometries(parts.map(([g, m]) => g.clone().applyMatrix4(m))), mat);
   mesh.castShadow = shadow; mesh.receiveShadow = true; return mesh;
+}
+// v5 R8 helpers: paint a geometry with a flat vertex colour; a strut as a transformed
+// cylinder geometry (both for merging into the fleet detail kit, one material).
+function paintCol(g, hex) {
+  const c = new THREE.Color(hex), n = g.attributes.position.count, arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3)); return g;
+}
+function geoStrut(a, b, r) {
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+  const g = new THREE.CylinderGeometry(r, r, len, 5);
+  const m = new THREE.Matrix4().compose(a.clone().addScaledVector(d, 0.5),
+    new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()),
+    new THREE.Vector3(1, 1, 1));
+  g.applyMatrix4(m); return g;
 }
 const canvasTex = (w, h, draw, rx = 1, ry = 1) => {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'));
@@ -177,6 +192,7 @@ function poseFleet(t, showHorn, showBos, hideNear = 0) {
     fleetSail.setMatrixAt(i, _dummy.matrix);
     fleetFlag.setMatrixAt(i, _dummy.matrix);
     fleetWake.setMatrixAt(i, _dummy.matrix);
+    fleetDetail[a.variant].setMatrixAt(a.vi, _dummy.matrix); // v5 R8: detail kit ikut pose kapal
     // v4 dark waterline rim: same pose, 8% wider in plan, 2% lower — a dark ring
     // around the deck so each hull separates from the blue water at aerial distance
     _dummy.scale.set(vis ? a.scale * 1.08 : 0, vis ? a.scale * 0.98 : 0, vis ? a.scale * 1.08 : 0);
@@ -184,7 +200,7 @@ function poseFleet(t, showHorn, showBos, hideNear = 0) {
     _dummy.updateMatrix();
     fleetRims[a.variant].setMatrixAt(a.vi, _dummy.matrix);
   }
-  for (const m of [...fleetHulls, ...fleetRims]) m.instanceMatrix.needsUpdate = true;
+  for (const m of [...fleetHulls, ...fleetRims, ...fleetDetail]) m.instanceMatrix.needsUpdate = true;
   fleetMast.instanceMatrix.needsUpdate = true;
   fleetSail.instanceMatrix.needsUpdate = true;
   fleetFlag.instanceMatrix.needsUpdate = true;
@@ -710,6 +726,51 @@ const FLEET_VARIANTS = [
   { beam: 1.0, bow: 6.1, stern: 5.2, full: 1.05 },   // high-bow warship
   { beam: 0.92, bow: 5.2, stern: 4.8, full: 0.8 },   // slim fine-bowed runner
 ];
+// v5 R8: detail kit armada = konstruksi yang SAMA dengan mkShip (deck + planks,
+// bulwark + rail, stem post + finial, forecastle, stern castle + 3 jendela + lantern,
+// rigging), di-scale ke outline tiap varian, digabung jadi SATU merged geometry per
+// varian (vertex colours, satu material) — 4 InstancedMesh, bukan 78 model penuh.
+// Cream sheer rim kapal utama TIDAK ikut: cincin 0,06 m itu sub-pixel dari kamera
+// consequence; yang membawa bacaan "kapal" dari atas adalah deck/planks + castle.
+// Rigging apex di y 8.6/8.2 (masthead fleet — mast diperpanjang ke 8.75, lihat buildShips).
+function fleetDetailGeo(v) {
+  const { beam: B, bow, stern, full } = v;
+  const parts = [];
+  const add = (g, hex) => { if (g.index) g = g.toNonIndexed(); parts.push(paintCol(g, hex)); }; // mergeGeometries butuh semua non-indexed
+  const deck = new THREE.ShapeGeometry(hullOutlineV(B * 0.94, bow * 0.94, stern * 0.94, full), 10);
+  deck.rotateX(-Math.PI / 2); deck.rotateY(Math.PI); deck.translate(0, 1.64, 0);
+  add(deck, '#a08055');
+  const pLen = (bow + stern) * 0.9;
+  for (const px of [-1.0, -0.5, 0, 0.5, 1.0]) {
+    const p = new THREE.BoxGeometry(0.42, 0.02, pLen); p.translate(px * B, 1.66, 0); add(p, '#6e4f30');
+  }
+  const bLen = 7.0 * (bow + stern) / 10.5;
+  for (const s of [-1, 1]) {
+    const bd = new THREE.BoxGeometry(0.06, 0.35, bLen); bd.translate(s * 1.56 * B, 1.78, 0); add(bd, '#8a6a45');
+    const rl = new THREE.BoxGeometry(0.08, 0.08, bLen); rl.translate(s * 1.56 * B, 1.99, 0); add(rl, '#8a6a45');
+  }
+  add(geoStrut(new THREE.Vector3(0, 0.1, bow), new THREE.Vector3(0, 1.2, bow + 0.4), 0.09), '#8a6a45');
+  add(geoStrut(new THREE.Vector3(0, 1.2, bow + 0.4), new THREE.Vector3(0, 2.1, bow + 0.25), 0.09), '#8a6a45');
+  const fin = new THREE.SphereGeometry(0.12, 8, 6); fin.translate(0, 2.15, bow + 0.25); add(fin, '#c9a24e');
+  const fc1 = new THREE.BoxGeometry(1.5 * B, 0.25, 1.8); fc1.translate(0, 1.78, bow - 1.0); add(fc1, '#a08055');
+  const fc2 = new THREE.BoxGeometry(1.2 * B, 0.2, 1.4); fc2.translate(0, 2.0, bow - 1.0); add(fc2, '#a08055');
+  const cs = new THREE.Shape();
+  cs.moveTo(-1.25 * B, -stern - 0.3); cs.lineTo(1.25 * B, -stern - 0.3); cs.lineTo(1.25 * B, -stern + 1.6);
+  cs.quadraticCurveTo(0, -stern + 2.0, -1.25 * B, -stern + 1.6); cs.closePath();
+  const cg = new THREE.ExtrudeGeometry(cs, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 1, curveSegments: 6, steps: 1 });
+  cg.rotateX(Math.PI / 2); cg.computeBoundingBox(); cg.translate(0, -cg.boundingBox.min.y + 1.6, 0);
+  add(cg, '#8a5f3c');
+  for (const wx of [-0.7, 0, 0.7]) {
+    const w = new THREE.BoxGeometry(0.28, 0.55, 0.04); w.translate(wx * B, 2.5, -stern - 0.38); add(w, '#2a2018');
+  }
+  const lp = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 5); lp.translate(0, 3.3, -stern - 0.1); add(lp, '#8a6a45');
+  const ln = new THREE.CylinderGeometry(0.1, 0.13, 0.3, 8); ln.translate(0, 3.55, -stern - 0.1); add(ln, '#c9a24e');
+  add(geoStrut(new THREE.Vector3(0, 8.6, 0.5), new THREE.Vector3(0, 2.0, bow - 0.1), 0.03), '#3a2c1e');
+  add(geoStrut(new THREE.Vector3(0, 8.6, 0.5), new THREE.Vector3(0, 2.6, -stern - 0.1), 0.03), '#3a2c1e');
+  add(geoStrut(new THREE.Vector3(0, 8.2, 0.5), new THREE.Vector3(1.5 * B, 1.9, 0.5), 0.03), '#3a2c1e');
+  add(geoStrut(new THREE.Vector3(0, 8.2, 0.5), new THREE.Vector3(-1.5 * B, 1.9, 0.5), 0.03), '#3a2c1e');
+  return mergeGeometries(parts);
+}
 function mkShip(detailed) {
   const hullM = C.SR.toon('#8a5f3c', { rim: 0.4, kick: 0.1 });
   const deckM = C.SR.toon('#a08055', { rim: 0.3, kick: 0.1 });
@@ -809,7 +870,7 @@ function buildShips() {
   const rimM = new THREE.MeshBasicMaterial({ color: '#2a1612' });
   const woodM = C.SR.toon('#8a6a45', { rim: 0.3, kick: 0.1 });
   const fleetSailM = C.SR.toon('#f2e8d0', { rim: 0.2, kick: 0, side: THREE.DoubleSide });
-  const mastG = new THREE.CylinderGeometry(0.12, 0.18, 8, 8); mastG.translate(0, 4, 0);
+  const mastG = new THREE.CylinderGeometry(0.12, 0.18, 8, 8); mastG.translate(0, 4.75, 0); // v5 R8: 0.75..8.75 (was 0..8) — masthead sejajar layar/bendera seperti kapal utama, rigging apex 8.6
   // v3 (f2300: the furled sail read as a hairline bar): radius 0.30/0.42 x 4.2 m long
   // (was 0.16/0.26 x 3.4) — a thick cream bundle across the masthead, readable at 90 m.
   const sailG = new THREE.CylinderGeometry(0.30, 0.42, 4.2, 8); sailG.rotateZ(Math.PI / 2); sailG.translate(0, 8.5, 0);
@@ -852,6 +913,9 @@ function buildShips() {
   fleetMast = inst(mastG, woodM); fleetSail = inst(sailG, fleetSailM); fleetFlag = inst(flagG, flagM);
   fleetWake = new THREE.InstancedMesh(wakeG, new THREE.MeshBasicMaterial({ map: wakeT, transparent: true, opacity: 0.5, depthWrite: false }), FLEET_N);
   fleetWake.castShadow = false; fleetWake.receiveShadow = false; fleetWake.frustumCulled = false; fleetWake.renderOrder = 2; C.scene.add(fleetWake);
+  // v5 R8: detail kit per varian (lihat fleetDetailGeo) — satu material vertex-colour.
+  const detailM = C.SR.toon('#ffffff', { rim: 0.4, kick: 0.1 }); detailM.vertexColors = true;
+  for (let v = 0; v < 4; v++) fleetDetail.push(inst(fleetDetailGeo(FLEET_VARIANTS[v]), detailM, vic[v]));
   // v3: hull colour variation — 5 wood tints + a small lightness jitter per ship, via
   // setColorAt (MeshToonMaterial honours instanceColor). The fleet read as 78 clones
   // of one orange box; the tints break that up at distance without touching the lead ship.
@@ -867,27 +931,42 @@ function buildOxenTorches() {
   const oxM = C.SR.toon('#a08055', { rim: 0.5, kick: 0.1 }); // lightened: oxen read as dark boxes at night
   const hornM = C.SR.toon('#d8cbb0', { rim: 0.3, kick: 0 });
   const darkM = C.SR.toon('#4a3426', { rim: 0.3, kick: 0 });
-  const mkOx = () => {
+  const mkOx = (flip = false) => {
+    // v5 R9: badan barel + punuk bahu (bukan kotak) + leher/kepala menunduk ke arah
+    // tarik + tanduk melengkung 2 segmen + telinga + kaki pose langkah BEKU
+    // (depan-kiri maju, depan-kanan mundur, dst; flip = cermin untuk sapi ke-2).
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 1.7), oxM); body.position.y = 0.9;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.6), oxM); head.position.set(0, 1.15, 1.05);
-    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.25), darkM); muzzle.position.set(0, 1.0, 1.4);
-    g.add(body, head, muzzle);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), oxM);
+    body.scale.set(0.55, 0.45, 1.0); body.position.y = 0.95; g.add(body);
+    const hump = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), oxM);
+    hump.scale.set(1, 0.7, 1.2); hump.position.set(0, 1.22, 0.55); g.add(hump);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.55, 8), oxM);
+    neck.rotation.x = 0.9; neck.position.set(0, 0.9, 1.0); g.add(neck);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.55), oxM);
+    head.rotation.x = 0.45; head.position.set(0, 0.82, 1.45); g.add(head);
+    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.25), darkM);
+    muzzle.rotation.x = 0.45; muzzle.position.set(0, 0.68, 1.68); g.add(muzzle);
     for (const s of [-1, 1]) {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.6, 6), hornM);
-      horn.rotation.z = s * 0.9; horn.position.set(s * 0.32, 1.5, 1.05); g.add(horn);
-      for (const dz of [-0.55, 0.55]) {
-        const legM = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.7, 6), oxM);
-        legM.position.set(s * 0.32, 0.35, dz); g.add(legM);
-      }
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.18), oxM);
+      ear.rotation.z = -s * 0.4; ear.position.set(s * 0.34, 0.95, 1.3); g.add(ear);
+      const h1 = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 6), hornM);
+      h1.rotation.z = s * 1.15; h1.position.set(s * 0.32, 1.12, 1.35); g.add(h1);
+      const h2 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.42, 6), hornM);
+      h2.rotation.z = s * 0.45; h2.position.set(s * 0.6, 1.42, 1.35); g.add(h2); // v5 R9 ronde 2: ujung tanduk y~1.6 (di atas punuk 1.53) + lebih lebar — siluet tanduk kebaca dari belakang/atas, sudut semua kamera film
+    }
+    for (const [s, fz, ang] of [[-1, 0.6, 0.35], [1, 0.6, -0.3], [-1, -0.6, -0.25], [1, -0.6, 0.3]]) {
+      const legM = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.75, 6), oxM);
+      legM.rotation.x = flip ? -ang : ang; legM.position.set(s * 0.32, 0.38, fz); g.add(legM);
     }
     const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 5), oxM);
-    tail.rotation.x = 0.3; tail.position.set(0, 0.8, -0.95); g.add(tail);
+    tail.rotation.x = -0.4; tail.position.set(0, 0.8, -1.05); g.add(tail);
+    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), darkM);
+    tuft.position.set(0, 0.48, -1.2); g.add(tuft);
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     return g;
   };
   oxenG = new THREE.Group(); C.scene.add(oxenG);
-  for (let i = 0; i < 2; i++) { const o = mkOx(); oxen.push(o); oxenG.add(o); }
+  for (let i = 0; i < 2; i++) { const o = mkOx(i === 1); oxen.push(o); oxenG.add(o); }
   oxenG.visible = false;
   // torches along the road (night only): pole + crossed flame planes
   torchesG = new THREE.Group(); C.scene.add(torchesG);
@@ -965,8 +1044,12 @@ function buildOxenTorches() {
 
 // ---------- the cast (built fresh with SR.build; the engine has NO turban hat, so it is
 // built from primitives on the head, same for the guards' steel caps) ----------
-function turban(c, col = '#f4f1ea') {
-  const r = 0.3, m = C.SR.toon(col, { rim: 0.3, kick: 0.1, flat2: true });
+function turban(c, col = '#b99a6b') {
+  // v5 R1: #f4f1ea flat2 (ramp 2-step [200,255]) = putih datar ~240 tanpa gradasi,
+  // bersinar di atas bukit gelap. Sekarang krem hangat lebih gelap + smoothRamp
+  // 64-step ganti flat2, jadi gradasi kiri-kanan nyata dari matahari day (az 75).
+  const r = 0.3, m = C.SR.toon(col, { rim: 0.2, kick: 0.2 }); // v5 R1 rimfix (QA independen): rim 0.35->0.2 — pita rim maks 235 masih di atas langit 222, risiko protes Sultan-terang lagi; gradasi tetap dari smoothRamp
+  m.gradientMap = smoothRamp();
   const wrap = new THREE.Mesh(new THREE.TorusGeometry(r * 0.95, r * 0.34, 10, 24), m);
   wrap.rotation.x = Math.PI / 2; wrap.position.y = r * 0.55; wrap.castShadow = true;
   const cap = new THREE.Mesh(new THREE.SphereGeometry(r * 0.95, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), m);
@@ -1006,10 +1089,12 @@ function buildCast() {
     SHIPCAST.push(c); return c;
   };
   // Sultan Mehmed II: red robe, white turban, gold sash, sword, moustache, stout, stern
-  sultan = reg(C.SR.build({ ...C.base, jacket: '#b02e24', jacket2: '#8a1f18', style: 'tunic', details: ['sash', 'buttons', 'belt'], sashCol: '#e8c45a', btn: '#e8c45a', beltCol: '#3a2416', moust: true, bodyW: 1.06 }), 0);
+  // v5 R1: headCol '#e0aa6e' (kulit sawo, seperti guard v3r2) ganti kepala putih —
+  // kepala putih + turban putih adalah yang bersinar di v4; turban() juga digelapkan.
+  sultan = reg(C.SR.build({ ...C.base, headCol: '#e0aa6e', jacket: '#b02e24', jacket2: '#8a1f18', style: 'tunic', details: ['sash', 'buttons', 'belt'], sashCol: '#e8c45a', btn: '#e8c45a', beltCol: '#3a2416', moust: true, bodyW: 1.06 }), 0);
   turban(sultan); sword(sultan);
-  // Advisor: blue robe, turban, gold sash, neutral
-  advisor = reg(C.SR.build({ ...C.base, jacket: '#3f6fb5', jacket2: '#2f558f', style: 'tunic', details: ['sash'], sashCol: '#e8c45a' }), 1);
+  // Advisor: blue robe, turban, gold sash, neutral (headCol sama seperti Sultan, R1)
+  advisor = reg(C.SR.build({ ...C.base, headCol: '#e0aa6e', jacket: '#3f6fb5', jacket2: '#2f558f', style: 'tunic', details: ['sash'], sashCol: '#e8c45a' }), 1);
   turban(advisor);
   // Workers: brown-orange jackets, red caps (up to 11 on screen in shot 7)
   const WJ = ['#c96a1e', '#b85a14', '#d07a2a', '#a85418', '#cf7a24', '#b45a10', '#c06a20', '#d27f2e', '#a85a1c', '#c4721f', '#bb6218'];
@@ -1029,10 +1114,25 @@ function buildCast() {
     steelCap(g); guards.push(g);
   }
 }
-// pose one puller on a rope line (rope A -> B, world points), phase-phased with the others
+// v5 R4: pose condong STATIS — SR.pose dipanggil dengan waktu BEKU (t tetap), jadi
+// fase langkah/lean tidak berubah antar frame; variasi antar pekerja datang dari `ph`
+// (fase langkah beku berbeda per individu). Kamera yang bergerak (dolly-out shot 5/7),
+// bukan kaki. (v4: C.pull(c, t, ...) menganimasikan kaki re-plant tiap siklus.)
 function puller(c, t, A, B, ph) {
-  C.pull(c, t, A, B, ph); C.face(c, 'shout'); use(c);
+  C.SR.pose(c, 'rope_pull', 0.37, { rope: [A, B], phase: ph, lean: 30 }); C.face(c, 'shout'); use(c);
 }
+// v5 R4: sama untuk pendorong bahu — fase langkah beku, bukan animasi jalan.
+function pusherStatic(c, target, ph, slope = 0) {
+  C.SR.pose(c, 'shoulder_push', 0.41, { target, period: 1.1, phase: ph, slope }); C.face(c, 'shout'); use(c);
+}
+
+// v5 R5 — kata-kata Sultan di shot 4, disalin dari ~/workspace/ships-short/voice/words.json
+// (21.62-30.36 dtk). BATAS JUJUR engine: tidak ada geometri mulut per kata — face()
+// menukar tekstur wajah utuh, TAPI pasangan serious/serioust beda HANYA di mulut
+// (mata/alis identik), jadi pergantian serious<->serioust di batas kata adalah swap
+// mulut semata, sinkron kata. Advisor/guard tidak bicara -> tidak ada swap di sana.
+const SULTAN_WORDS = [[21.62, 21.8], [21.8, 22.12], [22.12, 22.46], [22.46, 22.86], [22.86, 23.06], [23.06, 23.56], [23.56, 24.26], [24.64, 24.84], [24.84, 25.26], [25.26, 25.44], [25.44, 25.88], [26.2, 26.7], [26.7, 27.2], [27.2, 27.8], [27.8, 28.62], [28.62, 28.82], [28.82, 29.06], [29.06, 29.7], [29.7, 30.36]];
+function wordOpen(t, words) { for (const [s, e] of words) if (t >= s && t < e) return true; return false; }
 
 // ---------- the 12 shots ----------
 function buildShots() {
@@ -1088,19 +1188,41 @@ function buildShots() {
     else cc = dolly([-14, 4, -112], [2, 1.5, -89], pushK(t, 18.6667, 0.002), 44, 0.03);
     cam(cc); C.setShadowR(t < 15.5 ? 60 : 10); finish();
   }, { look: 'shipsDay' });
-  // 4 — SULTAN 21-30.5 s, day: sultan + advisor at the road base, camera glides up toward the hill
+  // 4 — SULTAN 21-30.5 s, day (v5 R2/R3/R5): diam -> snap nunjuk 26.5-27.0 (~180°/dtk)
+  // -> hold 0.5 dtk -> hard cut two-shot 27.5 -> reverse OTS 28.1 -> glide ke kapal 28.7.
+  // Kamera a dipertahankan selama snap+hold (kamera b melihat kapal, bukan Sultan).
   shot(21, t => {
     begin('shipsDay');
     poseLead(-20); poseFleet(t, false, false);
+    const hillT = V(0, hillY(-20) + 3, -18), downT = V(2.0, hillY(-52) + 0.2, -52.8);
+    const su = clamp((t - 26.5) / 0.5), se = 1 - (1 - su) * (1 - su);
+    const armT = t < 26.5 ? downT : t < 27.0 ? V(downT.x + (hillT.x - downT.x) * se, downT.y + (hillT.y - downT.y) * se, downT.z + (hillT.z - downT.z) * se) : hillT;
     place(sultan, 3, -52, -2.4, hillY(-52)); idle(sultan, t);
-    C.pointAt(sultan, V(0, hillY(-20) + 3, -18), 'Right'); // pointing at the hill the whole shot (v2 f700)
-    face(sultan, 'serious'); use(sultan);
-    place(advisor, 5.5, -54, -2.2, hillY(-54)); idle(advisor, t); face(advisor, 'calm'); use(advisor);
+    // v5 R2 (koreksi ronde 2): lengan KANAN menunjuk ke bukit = menunjuk KE BELAKANG
+    // badannya sendiri (Sultan menghadap kamera, bukit di belakangnya) — lengan
+    // menyeberangi torso dan tidak kelihatan dari kamera a (terbukti di still v4 f700
+    // dan still v5 26.75/27.3: lengan tetap di sisi badan). Lengan KIRI berangkat
+    // dari bahu sisi-kanan-layar dan menunjuk ke kanan-atas tanpa menyeberangi torso.
+    C.pointAt(sultan, armT, 'Left');
+    face(sultan, wordOpen(t, SULTAN_WORDS) ? 'serioust' : 'serious'); use(sultan);
+    place(advisor, 5.5, -54, -2.2, hillY(-54)); idle(advisor, t);
+    face(advisor, t >= 27.5 && t < 28.7 ? 'wide' : 'calm'); use(advisor);
     const a = dolly([-10, hillY(-52) + 3, -66], [4, hillY(-52) + 1.8, -53], pushK(t, 21, 0.0015), 40);
     const b = dolly([-3, hillY(-40) + 3.5, -52], [0, hillY(-20) + 2, -18], pushK(t, 25.3333, 0.0018), 42, -0.03);
-    const u = clamp((t - 25.3333) / 1.3333);
-    const cc = t < 25.3333 ? a : mixCam(a, b, glide(u));
-    cam(cc); dofAt(cc, [3, hillY(-52) + 1.8, -52]); C.setShadowR(14); finish();
+    // R3: pan lateral 0.6 dtk (24.3-24.9) — kamera geser ke arah advisor saat VO ganti baris
+    const pan = sm01(24.3, 24.9, t); a.pos[0] += 1.5 * pan; a.look[0] += 1.0 * pan;
+    // R2 (koreksi ronde 1): kamera b v4 melihat KAPAL, bukan Sultan — snap 26.5-27.0
+    // tidak kelihatan di sana. Kamera a dipertahankan sampai hold selesai (27.5);
+    // baru cut ke two-shot, lalu glide ke kapal di akhir shot (28.7-30.5).
+    const c2 = { pos: [-6, hillY(-52) + 2.0, -60], look: [4.2, hillY(-52) + 1.4, -53], fov: 36, roll: 0 }; // two-shot (koreksi ronde 2: c2 lama hampir = kamera a; ini 30% lebih dekat, fov 36, keduanya penuh dalam frame)
+    const c2r = { pos: [7.2, hillY(-54) + 2.4, -58.5], look: [3, hillY(-52) + 1.5, -52], fov: 38, roll: 0 }; // reverse: OTS melewati bahu advisor ke Sultan yang menunjuk
+    let cc;
+    if (t < 27.5) cc = a;
+    else if (t < 28.1) cc = c2;
+    else if (t < 28.7) cc = c2r;
+    else cc = mixCam(c2r, b, glide(clamp((t - 28.7) / 1.8))); // glide ke kapal (arah yang ditunjuk)
+    cam(cc);
+    dofAt(cc, t >= 27.5 && t < 28.1 ? [4.2, hillY(-52) + 1.4, -53] : t >= 28.1 && t < 28.7 ? [3, hillY(-52) + 1.5, -52] : [3, hillY(-52) + 1.8, -52]); C.setShadowR(14); finish();
   }, { look: 'shipsDay' });
   // 5 — BUILD 30.5-35.5 s, night: greased rails CU -> ship pulled up the hill. 3 greasers + 4 pullers + 2 oxen.
   shot(30.5, t => {
@@ -1125,7 +1247,14 @@ function buildShots() {
     showOxen(z); torchesG.visible = true; showDust(t);
     let cc;
     if (t < 33) { cc = dolly([3.5, hillY(-30) + 2.4, -37], [0, hillY(-30) + 0.5, -29], pushK(t, 30.5, 0.0028), 36); dofAt(cc, [0, hillY(-30) + 0.4, -30]); }
-    else cc = dolly([16, hillY(z) + 5, z - 12], [0, hillY(z) + 1.5, z], pushK(t, 33, 0.0018), 42);
+    else { // v5 R4: dolly-out close->wide 1.4 dtk (penarik statis, kamera yang bergerak).
+      // Koreksi ronde 2: close eksplisit [5, z+2] memandang MENEMBUS kapal (pekerja
+      // tertutup buritan, cuma 1 pekerja kelihatan di tepi). Close sekarang dolly
+      // 0.75 dari kamera wide v4 — 12 m dari kapal, dari sisi, pekerja di tepi haluan.
+      const wC = dolly([16, hillY(z) + 5, z - 12], [0, hillY(z) + 1.5, z], 0.75, 40);
+      const wW = dolly([16, hillY(z) + 5, z - 12], [0, hillY(z) + 1.5, z], 1.0, 42);
+      cc = mixCam(wC, wW, glide(clamp((t - 33) / 1.4)));
+    }
     cam(cc); C.setShadowR(12); finish();
   }, { look: 'shipsNight' });
   // 6 — MAP 35.5-40.83 s, day: map card overlay; 3D base is the setting aerial, dimmed.
@@ -1151,12 +1280,18 @@ function buildShots() {
     for (let k = 0; k < 3; k++) { // pushers behind the stern, driving it uphill
       const c = workers[8 + k], zz = z - 7 - k * 1.3, x = [-1.9, 1.9, -1.7][k];
       place(c, x, zz, 0, hillY(zz));
-      C.SR.pose(c, 'shoulder_push', t, { target: V(0, hillY(z - 5) + 1.2, z - 5), period: 1.1, slope: 0.15 });
-      face(c, 'shout'); use(c);
+      pusherStatic(c, V(0, hillY(z - 5) + 1.2, z - 5), k * 0.13, 0.15); // v5 R4: fase langkah beku
     }
     showOxen(z); torchesG.visible = true; showDust(t);
     let cc;
-    if (t < 43.3333) cc = dolly([-9, hillY(-25) + 6, -42], [0, hillY(-18) + 1.5, -18], pushK(t, 40.8333, 0.002), 44);
+    if (t < 43.3333) { // v5 R4: dolly-out close->wide 1.4 dtk, lalu tahan wide.
+      // Koreksi ronde 1: close = dolly() ke arah look MENEMBUS kapal (kamera mendarat
+      // 1 m dari buritan, buritan memenuhi frame). Close sekarang eksplisit di sisi
+      // jalan, 6 m dari penarik, kapal di tepi kanan frame.
+      const wC = { pos: [-4.5, hillY(-25) + 3.2, -34], look: [0, hillY(-22) + 1.2, -22], fov: 40, roll: 0 };
+      const wW = dolly([-9, hillY(-25) + 6, -42], [0, hillY(-18) + 1.5, -18], 1.0, 44);
+      cc = mixCam(wC, wW, glide(clamp((t - 40.8333) / 1.4)));
+    }
     else cc = dolly([16, hillY(z) + 5, z - 12], [0, hillY(z) + 1.5, z], pushK(t, 43.3333, 0.0018), 42);
     cam(cc); C.setShadowR(16); finish();
   }, { look: 'shipsNight' });
@@ -1168,7 +1303,7 @@ function buildShots() {
     // Merlons sit every 3 m (centres 6.75/12.75/15.75/18.75/21.75; 9.75 is the every-7th
     // skip) — the old middle guard at 12.5 stood dead behind the 12.75 merlon, and the
     // outer two (8, 17) were bisected by the frame edges at fov 40 / 22 m.
-    const gspots = [[8.25, 'wideG'], [11.25, 'shoutG'], [14.25, 'wideG'], [17.25, 'shoutG'], [20.25, 'wideG']]; // v4: guard moods (main.js) — brows below the cap rim, ~40% bigger features
+    const gspots = [[8.25, 'wideG'], [11.25, 'shoutG'], [14.25, 'shockG'], [17.25, 'shoutG'], [20.25, 'wideG']]; // v4: guard moods (main.js) — brows below the cap rim, ~40% bigger features; v5 R6: tengah = shockG (mata melotot + keringat)
     if (t >= 49) gspots.forEach(([x, mood], k) => {
       const c = guards[k];
       place(c, x, WALL_Z, Math.PI, D0 + 12); c.root.scale.setScalar(1.45); idle(c, t); // v4: 1.45 (was 1.25 in v3r2, 0.8 from reg()) — heads ~32 px at 540w, faces finally readable; still fits the merlon gaps
@@ -1207,8 +1342,7 @@ function buildShots() {
       for (let k = 0; k < 3; k++) {
         const c = workers[1 + k], x = 5.6 + k * 0.9, z = -47 + (k - 1) * 1.1;
         place(c, x, z, Math.PI / 2, hillY(z));
-        C.SR.pose(c, 'shoulder_push', t, { target: V(7.3, hillY(-47) + 0.9, -47), period: 1.1 });
-        face(c, 'shout'); use(c);
+        pusherStatic(c, V(7.3, hillY(-47) + 0.9, -47), k * 0.13); // v5 R4: fase langkah beku
       }
     }
     let cc;
@@ -1225,7 +1359,11 @@ function buildShots() {
     begin('shipsGold');
     poseLead(-20); poseFleet(t, true, false);
     discOv = { az: 3, el: 3 }; // v3r2 f2300: the sun disc (az 6) sat half-behind the x=125 tower; az 3 pulls it ~70 px left at 540w, clear of the tower and nearer the frame centre like 3D v2. Disc only — the golden key light stays at az 6.
-    const cc = { pos: [37, 25, 2], look: [0, 6, 95], fov: zoomFov(44, pushK(t, 75, 0.0016)), roll: 0 }; // v3 f2300: lower (30->25) + closer (z 0->2, x 38->37), look lowered (8->6): sightline to the fleet drops ~1.5° so more hull side shows under the deck tops, city + towers stay in frame, near waterline stays in the lower third
+    // v5 R7: crane-up + pull-back — framing melebar ~17%/dtk selama 2 dtk pertama
+    // (jarak 0.80x -> 1.0x, fov 40 -> 43), lalu tahan wide. Armada beku (poseFleet bob saja).
+    const cA = dolly([37, 25, 2], [0, 6, 95], 0.80, 40);
+    const cB = { pos: [37, 25, 2], look: [0, 6, 95], fov: 43, roll: 0 };
+    const cc = mixCam(cA, cB, glide(clamp((t - 75) / 2))); // v3 f2300: lower (30->25) + closer (z 0->2, x 38->37), look lowered (8->6): sightline to the fleet drops ~1.5° so more hull side shows under the deck tops, city + towers stay in frame, near waterline stays in the lower third
     cam(cc); C.setShadowR(40); finish();
   }, { look: 'shipsGold' });
   // 12 — POLL 79.67-86.4 s, golden: same wide, dimmed. Poll card overlay.
@@ -1281,7 +1419,10 @@ export function shipsOverlay2D(t, og) {
   // and the route's control points shifted left (380->340, 430->410), ~46 px clear.
   // Serif type like the v2 card (the engine's Anton/InterB are sans; canvas 'serif' covers it).
   if (t >= 35.5 && t < 40.8333) {
-    og.save(); og.globalAlpha = clamp01((t - 35.5) / 0.4);
+    // v5 R10: dissolve masuk ~1 dtk -> garis rute tergambar 36.5-38.0 (~25% lebar frame/dtk:
+    // rute x190->600 = 38% lebar dalam 1.5 dtk) -> kartu penuh DIAM ~2 dtk -> dissolve
+    // keluar 40.0-40.83. Label/kartu statis, kamera tidak zoom/pan pada peta.
+    og.save(); og.globalAlpha = Math.min(clamp01((t - 35.5) / 1.0), clamp01((40.8333 - t) / 0.83));
     og.fillStyle = '#0d0d0f'; og.fillRect(0, 0, og.canvas.width, og.canvas.height);
     og.fillStyle = '#1e3054'; og.strokeStyle = '#e8e2d4'; og.lineWidth = 3 * S;
     og.beginPath(); og.rect(X(116), Y(334), X(143), Y(1326)); og.fill(); og.stroke(); // v4: bottom 1750 -> 1660
@@ -1290,12 +1431,17 @@ export function shipsOverlay2D(t, og) {
     og.beginPath(); og.moveTo(X(640), Y(952)); og.lineTo(X(985), Y(952)); og.stroke();
     og.fillStyle = '#e8e2d4';
     for (let i = 0; i < 9; i++) og.fillRect(X(650 + i * 38), Y(932), X(16), Y(20));
+    og.fillStyle = '#ffffff';
+    og.beginPath(); og.arc(X(190), Y(1470), 18 * S, 0, 7); og.fill(); // titik awal: langsung ada
+    const rp = clamp01((t - 36.5) / 1.5); // kemajuan garis rute
+    og.save();
+    og.beginPath(); og.rect(0, 0, X(190 + rp * 410), og.canvas.height); og.clip(); // garis tergambar kiri->kanan
     og.strokeStyle = '#ffffff'; og.lineWidth = 7 * S; og.setLineDash([26 * S, 20 * S]);
     og.beginPath(); og.moveTo(X(190), Y(1470));
     og.bezierCurveTo(X(340), Y(1300), X(410), Y(1050), X(600), Y(870)); // v4: control points left so the dashes clear "10 km"
     og.stroke(); og.setLineDash([]);
-    og.fillStyle = '#ffffff';
-    for (const [dx, dy] of [[190, 1470], [600, 870]]) { og.beginPath(); og.arc(X(dx), Y(dy), 18 * S, 0, 7); og.fill(); }
+    og.restore();
+    if (rp >= 1) { og.fillStyle = '#ffffff'; og.beginPath(); og.arc(X(600), Y(870), 18 * S, 0, 7); og.fill(); } // titik akhir: muncul saat garis sampai
     og.fillStyle = '#f2ede2'; og.textAlign = 'center'; og.textBaseline = 'middle';
     og.letterSpacing = `${5 * S}px`; // letterSpacing is in canvas px (not 1080 space): scale it, or labels overflow the frame
     og.font = `${40 * S}px Georgia, 'Times New Roman', serif`;
