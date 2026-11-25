@@ -510,3 +510,14 @@ flag GPU `--use-angle=gl` gagal di Colab, yang jalan `--use-angle=vulkan`.
 QA: 36 still lokal + 21 frame final, nol blank, koma caption bersih.
 Satu nit diketahui: caption "dari pesisir Bosporus" menimpa label "BOSPORUS"
 di map card. Detail: `claude-3d-animated-shorts/SHIPS-FILM.md`.
+
+**Upgrade v2 (25 Nov 2026, perintah Avres "biar nyaingin v2"):** perbandingan
+10 frame menunjukkan v2 menang 7–8 dari 10, lalu `ships.js` 955 → 1143 baris
+(malam diterangkan + lampu obor, banding diperbaiki, air 170 goresan,
+`CHAIN_Z` 62→70 — rantai ternyata terkubur di bukit, map diukur ulang,
+tembok bata + penjaga di celah merlon, bukit bertekstur noise canvas).
+Tiga ronde build + QA independen, verdict akhir **GO**. Lawan v2 sekarang:
+3D menang 3 (f300, f1225, f1900), seri 3 (f75, f230, f2300), v2 menang 2 tipis
+(f465, f1140). Render berikutnya: 4 lane ±648 frame — Colab1 0–647, Colab2
+648–1295, Kaggle Shinzuy 1296–1943, Kaggle ayamhuz 1944–2592; output
+`ships-3d-v2.mp4`. Detail: `claude-3d-animated-shorts/SHIPS-FILM.md`.
