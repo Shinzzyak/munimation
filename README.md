@@ -499,3 +499,14 @@ Session di-stop setelah selesai (`colab stop -s ships`) supaya CU tidak jalan.
 - Repo `googlecolab/google-colab-cli` (★3.031) dan `deepbeepmeep/WanGP`
   (★12.224) — diverifikasi saat riset.
 - Dibuat 24–25 Nov 2026 oleh Avres (Shinzzyak) dan Gefreiter.
+
+## Film pertama skill 3D — Kapal Lewat Darat (rebuild, 25 Nov 2026)
+
+Video "Kapal Lewat Darat" dibangun ulang sebagai film baru di skill 3D
+(`?ships=1`, `claude-3d-animated-shorts/engine/ships.js`): 12 shot, 86,4 dtk,
+2592 frame, VO/caption/audio dipakai ulang dari `ships-short/`. Render Colab
+T4: 5 chunk, ±6,5 menit (±0,16 dtk/frame), 0,43 CU. Perbaikan penting:
+flag GPU `--use-angle=gl` gagal di Colab, yang jalan `--use-angle=vulkan`.
+QA: 36 still lokal + 21 frame final, nol blank, koma caption bersih.
+Satu nit diketahui: caption "dari pesisir Bosporus" menimpa label "BOSPORUS"
+di map card. Detail: `claude-3d-animated-shorts/SHIPS-FILM.md`.

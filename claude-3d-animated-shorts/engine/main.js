@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { makeStickRig } from './stickrig.js';
 import { makePost } from './post.js';
 import { buildWorld, H, RAILTOP } from './world.js';
+import { buildShipsFilm, shipsOverlay2D } from './ships.js';
 
 const Q = new URLSearchParams(location.search);
 const WW = +(Q.get('w') || 540), HH = +(Q.get('h') || 960);
@@ -518,6 +519,7 @@ if (Q.has('chase')) { SHOTS.length = 0;
   // 8–10 s: on the roof, waving his hat, camera rising and pulling back; the other two still galloping alongside
   shot(8, (t) => { actors(t); const z = zf(t) + COACH[0] + 2.5, u = clamp((t - 8) / 2); look(V(lerp(5, 9, u), lerp(5.2, 8.0, u), z + lerp(6, 9, u)), V(0.6, 4.2, z - 1.5), 44); shadowR = 20; focus = V(1, 3, z); });
 }
+if (Q.has('ships')) { SHOTS.length = 0; buildShipsFilm({ THREE, scene, camera, SR, hemi, sun, SUNDIR, WW, HH, clamp, ease, eio, lerp, V, vl, look, dof, shot, place, idle, face, headC, yawTo, arm, leg, pointAt, wave1, waveArms, hips, headTurn, dirW, LEFT, pull, base, LOOKS, setLook, setShadowR: v => { shadowR = v; }, setLift: v => { U.uLift.value.set(...v); } }); }
 SHOTS.sort((a, b) => a.t0 - b.t0); if (Q.has('cut10')) { const cut = SHOTS.findIndex(x => x.t0 >= 9.4); if (cut > 0) SHOTS.length = cut; }
 
 // ---------- 2D overlay: one-word captions, cards, labels ----------
@@ -560,13 +562,14 @@ function render(t) {
   else { renderShot(S, t); og.drawImage(canvas, 0, 0); }
   const lab = window.__lab, bg = window.__bang;
   if (lab) lab.forEach(([s, P, c]) => label(s, P, c)); if (bg) bang(bg, t);
-  if (!Q.has('chase') && FL[5]) card('1 PHÚT', wt(5, 'một') - 0.05, t, wt(5, 'ông') - 0.1, 330, 140);
-  if (!Q.has('chase') && FL[6]) card('2 PHÚT', wt(6, 'hai') - 0.05, t, E(6) + 0.1, 330, 140);
-  if (!Q.has('chase') && FL[8]) card('THÉP ≈ 15 × KHÔNG KHÍ', wt(8, 'nhanh') - 0.1, t, E(8) + 0.15, 300, 92);
-  if (!Q.has('lineup') && !Q.has('chase')) caption(t);
+  if (!Q.has('chase') && !Q.has('ships') && FL[5]) card('1 PHÚT', wt(5, 'một') - 0.05, t, wt(5, 'ông') - 0.1, 330, 140);
+  if (!Q.has('chase') && !Q.has('ships') && FL[6]) card('2 PHÚT', wt(6, 'hai') - 0.05, t, E(6) + 0.1, 330, 140);
+  if (!Q.has('chase') && !Q.has('ships') && FL[8]) card('THÉP ≈ 15 × KHÔNG KHÍ', wt(8, 'nhanh') - 0.1, t, E(8) + 0.15, 300, 92);
+  if (!Q.has('lineup') && !Q.has('chase') && !Q.has('ships')) caption(t);
+  if (Q.has('ships')) shipsOverlay2D(t, og);
   return out2.toDataURL('image/jpeg', 0.92);
 }
-window.DUR = Math.min(DUR, +(Q.get('dur') || 1e9)); window.frame = render; window.FL = FL; window.ready = true;
+window.DUR = Q.has('ships') ? 86.4 : Math.min(DUR, +(Q.get('dur') || 1e9)); window.frame = render; window.FL = FL; window.ready = true;
 
 // ---------- character review page (owner 2026-11-10: "tạo 1 trang chỉ để mình duyệt nhân vật, cho phép xoay, zoom… góp ý trên đó") ----------
 // index.html?viewer=1 → live orbit view of the real cast (same rig/faces/colours as the film), mood + pose pickers, OK/Cần sửa notes

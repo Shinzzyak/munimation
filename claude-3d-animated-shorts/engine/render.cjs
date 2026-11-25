@@ -9,7 +9,12 @@ const CHROME = process.env.CHROME || ['/Applications/Google Chrome.app/Contents/
     r.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(r); }).listen(0);
   const port = srv.address().port;
   // PATCH 2026-11-25 (VM): root needs --no-sandbox
-  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+  // RENDER_GL=gpu -> real-GPU ANGLE flags (Colab T4); default keeps SwiftShader so the local path is untouched
+  // PATCH 2026-11-25 (Colab T4): '--use-angle=gl' FAILS to create a WebGL
+  // context on Colab (verified: context FAIL, while vulkan + gl-egl both
+  // report Tesla T4). Vulkan is the proven v2 path (Remotion v2 used it).
+  const GL = process.env.RENDER_GL === 'gpu' ? ['--use-gl=angle', '--use-angle=vulkan', '--no-sandbox'] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'];
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: GL });
   const page = await browser.newPage(); page.on('requestfailed', r => console.log('FAIL', r.url())); page.on('response', r => { if (r.status() >= 400) console.log('HTTP', r.status(), r.url()); }); page.on('pageerror', e => console.log('PAGE ERROR', e.message)); page.on('console', m => console.log('console:', m.text()));
   await page.goto(`http://127.0.0.1:${port}/${process.env.PAGE || "index.html"}?w=${w}&h=${h}&look=${process.env.LOOK || 'c'}&style=${process.env.STYLE || 'ph'}${process.env.XQ || ''}`); await page.waitForFunction('window.ready', { timeout: 180000 });
   fs.mkdirSync(path.join(ROOT, path.dirname(OUT)), { recursive: true });
@@ -17,10 +22,12 @@ const CHROME = process.env.CHROME || ['/Applications/Google Chrome.app/Contents/
     for (const s of stills) { const d = await page.evaluate(t => window.frame(t), +s); fs.writeFileSync(path.join(ROOT, path.dirname(OUT), `still-${s}.jpg`), Buffer.from(d.split(',')[1], 'base64')); }
   } else {
     const dur = await page.evaluate(() => window.DUR), n = Math.round(dur * +fps), t0 = Date.now();
+    // RENDER_F0 / RENDER_F1: frame-range render (chunking for Colab/Kaggle); defaults = full timeline
+    const F0 = Math.max(0, +(process.env.RENDER_F0 || 0)), F1 = Math.min(n, +(process.env.RENDER_F1 || n));
     const ff = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'image2pipe', '-framerate', fps, '-c:v', 'mjpeg', '-i', '-', '-c:v', 'libx264', '-crf', '20', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', path.join(ROOT, OUT)]);
     const done = new Promise(r => ff.on('close', r));
-    for (let f = 0; f < n; f++) { const d = await page.evaluate(t => window.frame(t), f / +fps); if (!ff.stdin.write(Buffer.from(d.split(',')[1], 'base64'))) await new Promise(r => ff.stdin.once('drain', r)); if (f % 24 === 0) process.stdout.write(`\r${f}/${n}`); }
-    ff.stdin.end(); await done; console.log(`\n${n} frames in ${((Date.now() - t0) / 1000).toFixed(0)}s -> ${OUT}`);
+    for (let f = F0; f < F1; f++) { const d = await page.evaluate(t => window.frame(t), f / +fps); if (!ff.stdin.write(Buffer.from(d.split(',')[1], 'base64'))) await new Promise(r => ff.stdin.once('drain', r)); if (f % 24 === 0) process.stdout.write(`\r${f}/${n}`); }
+    ff.stdin.end(); await done; console.log(`\n${F1 - F0} frames (f ${F0}..${F1 - 1} of ${n}) in ${((Date.now() - t0) / 1000).toFixed(0)}s -> ${OUT}`);
   }
   await browser.close(); srv.close();
 })().catch(e => { console.error(e); process.exit(1); });
