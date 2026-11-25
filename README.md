@@ -128,7 +128,14 @@ siang 25 Nov 2026, semuanya atas perintah Avres:
    port Remotion gagal karena sandbox menerima TCP connect ke semua port
    (patch `port-config.js` hanya loopback); WebGL lokal butuh
    `--gl=swangle` di headless-shell. Video MP4 tidak ikut di repo (ukuran)
-   — file jadi `roblox-no-word.mp4`.
+   — file jadi `roblox-no-word.mp4`. **v2 (26 Nov 2026, feedback Avres:
+   suara cowo + kurangin AI slop): narrator `af_heart` → `am_adam`,
+   shout → `am_michael` (42,0 dtk); badge counter "912,450 WORDS LEFT"
+   dihapus dari aktor bertape (root cause: `mouth_tape` salah terdaftar
+   sebagai counter); grade hangat ACES + fog haze; tekstur plaster di
+   dinding; scene twist malam benar-benar gelap; framing f614 dist 28.
+   Patch engine: `roblox-shorts/engine-patches-v2/` (+ NOTE.md).
+   File jadi `roblox-no-word-v2.mp4`.
 4. **Dua dokumen Google Docs** — `docs/`: "Mark AI Guy — What-If Story
    Engine" (21.317 karakter: workflow klip 10 detik + end-frame continuity
    + naskah narator + paket upload) dan "Rick's Clips Master Prompt v3"

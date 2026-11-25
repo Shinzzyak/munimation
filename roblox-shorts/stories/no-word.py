@@ -14,6 +14,15 @@ Fixed: all actors face the camera (rotY -0.35..0.3, hair_color.py style).
 Medium 2-shots at dist 12 cut both actors in half at the frame edges
 (9:16 half-width ~3.15 studs, actors at +/-3); widened to dist 17,
 playground medium to dist 20 centered [1, 0, 0.75] (actors 8.5 apart).
+QA 2026-11-26 round 2: f614 STILL cut both actors at dist 20 (half-width
+~5.25 studs vs actor outer edges -6..+6.5); widened to dist 28 — dist 26
+would leave only ~0.3 stud margin once the medium() -1.2 drift push-in
+tightens the frame over the shot, and wide() fov 58 (half-width ~6.24)
+does not fit either. dist 28 -> half-width ~7.3 shrinking to ~7.0.
+
+VOICE 2026-11-26 (round 2, user decision overrides skill): narrator
+af_heart -> am_adam (engine default in scripts/shorts/audio.py); shout w1
+am_adam -> am_michael so it still contrasts with the narrator.
 """
 from shorts.scene import HALF, OFF, close_up, cover, face, hold, kf, medium, shot, wide  # noqa: F401
 
@@ -30,7 +39,7 @@ BEATS = [
     {"id": "b7", "text": "The bully asked for my lunch. I said yes. I was starving.", "pause": 0.08},
     {"id": "b8", "text": "Then the principal called me in. Someone broke the trophy case.", "pause": 0.08},
     {"id": "b9", "text": 'He pointed at me and asked, "Did you do it?"', "pause": 0.12},
-    {"id": "w1", "text": "NO!", "voice": "am_adam", "shout": True, "pause": 0.2},
+    {"id": "w1", "text": "NO!", "voice": "am_michael", "shout": True, "pause": 0.2},
     {"id": "b10", "text": "The whole school went silent. Nobody had ever heard that word before.", "pause": 0.12},
     {"id": "b11", "text": "Then the principal smiled, and ripped the tape off his own mouth.", "pause": 0.08},
     {"id": "b12", "text": "He held up a hammer and said, 'I broke it. Last night.'", "pause": 0.12},
@@ -130,7 +139,7 @@ def scenes(T):
         {   # stakes: bully takes the lunch in the playground
             "id": "playground", "location": "playground", "startFrame": S7, "endFrame": S8,
             "cameraShots": cover(S7, S8, [
-                lambda a, b: medium(a, b, [1, 0, 0.75], dist=20),
+                lambda a, b: medium(a, b, [1, 0, 0.75], dist=28),
                 lambda a, b: close_up(a, b, HERO_PG),
                 lambda a, b: close_up(a, b, BULLY_P),
             ]),
