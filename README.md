@@ -115,7 +115,20 @@ siang 25 Nov 2026, semuanya atas perintah Avres:
    check otomatis. Poin terbesar: **Kokoro TTS LOKAL (ONNX) — gratis, tanpa
    batas 10 request/hari AI Studio**. 3 contoh MP4 jadi + 5 video referensi
    di arsip (tidak ikut di repo karena ukuran). Detail:
-   `roblox-remotion-study/STUDY.md`.
+   `roblox-remotion-study/STUDY.md`. **Video pertama dari engine ini
+   (26 Nov 2026): `roblox-shorts/stories/no-word.py` — "In this town,
+   saying the word 'no' is against the law." (15 beat, 43,1 dtk,
+   1080×1920).** Rule check bersih, QA contact sheet 2 putaran (close-up
+   belakang kepala → semua aktor menghadap kamera; medium 2-aktor
+   terpotong tepi → dilebarin dist 17/20). Render Colab T4 1 lane ~6 menit
+   (~0,28 dtk/frame). **Gotcha render: `--gl=angle` di Colab ternyata CPU
+   (SwiftShader ~25 dtk/frame) — pakai `--gl=angle-egl` (GPU T4, 0,91
+   dtk/frame di speed test).** Gotcha Linux lain: glob ffmpeg ambil
+   `ffmpeg.exe` dulu (patch `audio.py` utamakan biner non-.exe); probe
+   port Remotion gagal karena sandbox menerima TCP connect ke semua port
+   (patch `port-config.js` hanya loopback); WebGL lokal butuh
+   `--gl=swangle` di headless-shell. Video MP4 tidak ikut di repo (ukuran)
+   — file jadi `roblox-no-word.mp4`.
 4. **Dua dokumen Google Docs** — `docs/`: "Mark AI Guy — What-If Story
    Engine" (21.317 karakter: workflow klip 10 detik + end-frame continuity
    + naskah narator + paket upload) dan "Rick's Clips Master Prompt v3"
