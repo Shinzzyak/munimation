@@ -21,6 +21,22 @@ Dua video yang dihasilkan dari kerja ini:
 
 ## Yang baru — 25 Nov 2026 (update kedua)
 
+### Update ketiga — film 3D v3 (25 Nov 2026 malam)
+
+Setelah `ships-3d-v2.mp4` jadi, Avres menilai 4 hal masih kalah dari
+Remotion v2: rantai kebaca donat, armada ngapung kebaca kotak, prajurit di
+tembok kurang keliatan, dan pencahayaan/background v2 berasa lebih hidup.
+Fix round v3 (ships.js 1143 → 1260 baris, ships.js saja): mata rantai jadi
+lonjong pipih saling kait 90°, setengah tenggelam; armada dikasih layar
+tergulung tebal + bendera merah + wake + variasi warna hull; kamera snap
+dideketin, prajurit menghadap kamera + lampu depan + bayangan diagonal di
+tembok; haze dihangatin + texture lukis di air/tembok. QA dua putaran
+(NO-GO lalu GO), render 4 lane Colab T4 (akun 1–4, ~6 menit total,
+0,13–0,16 dtk/frame; Kaggle MATI — kernel-nya jalan CPU di dua akun, jangan
+dipakai buat engine ini). Verdict 10 frame lawan v2: **v3 menang 4, seri 6,
+v2 menang 0** — pertama kalinya v2 tidak menang satu frame pun. Detail:
+`claude-3d-animated-shorts/SHIPS-FILM.md` (bagian Upgrade v3).
+
 Update ini (commit setelah `a868aa2`) menambah empat hal yang dikerjakan
 siang 25 Nov 2026, semuanya atas perintah Avres:
 

@@ -121,12 +121,61 @@ Kaggle ayamhuz 1944–2592 (masing-masing ukur kecepatan dulu dengan segmen
 pendek; lane yang gagal diambil alih lane lain). Output akhir:
 `~/workspace/colab-render-test/ships-3d-v2.mp4`.
 
+## Upgrade v3 — 4 keluhan Avres (25 Nov 2026, malam)
+
+Setelah `ships-3d-v2.mp4` jadi, Avres menilai 4 hal masih kalah dari
+Remotion v2. Me verifikasi sendiri dari `cmp2_f465/f1500/f2300` — dia benar
+di empat-empatnya. Fix round v3, ships.js 1143 → 1260 baris (ships.js saja;
+`main.js`/`render.cjs`/`post.js` tidak disentuh):
+
+1. **Rantai (f465):** torus 0.17/0.06 → oval pipih 0.19/0.045 skala
+   1.5×0.72, rotasi 90° berselang, pitch 0.42→0.36, 430→500 mata, besi
+   `#5c5346` rim 0.9, y 0.30→0.10 (setengah tenggelam), strip busa
+   dimatikan (opacity 0.45→0.3, lebar 3.5→1.6 m). CHAIN_Z=70
+   dipertahankan. Hasil: mata rantai perunggu saling kait, nempel di air —
+   kebaca rantai, bukan donat.
+2. **Armada (f2300):** layar tergulung 0.16/0.26×3.4 → 0.30/0.42×4.2 m;
+   `fleetFlag` InstancedMesh baru (bendera merah 1.6×1.0 m); `setColorAt`
+   5 tint hull; `fleetWake` elips 6.8×15 m; kamera consequence
+   [38,30,0]→[37,25,2]. Tetap 78 kapal. Hasil: layar krem tebal + bendera
+   merah + wake — armada kebaca kapal, bukan kotak.
+3. **Prajurit (f1500):** kamera snap [13,22.5,80]→[14.25,20.5,85], fov
+   46→54; key light baru `snapKey` (DirectionalLight `#fff1d6` 1.1, hanya
+   di branch snap); prajurit di-scale 1.25 di branch snap; bayangan
+   diagonal dua quad (opacity 0.30+0.32) — tiga kali gagal dulu (FrontSide
+   ke-cull, gradient-alpha ~3× lebih lemah + mirror, alphaMap nol efek).
+   Putaran 2: DOF band penyebab background memudar → `dofAt` 0.35→5; muka
+   prajurit kulit tan `#e0aa6e`, steel cap `#6f757e`.
+4. **Pencahayaan/background:** day warm 0.02→0.05, fog `#cfe6fa`→
+   `#d3deeb`; fill siang 0→0.35 `#fff2dd`; putaran 2: matahari f2300
+   dipindah (`discOv` baru, az 3 el 3 — matahari utuh di x≈0.62, 3 bush
+   penghalang dihapus); kota malam menara + tembok dipisah ke mesh
+   bertekstur bata; night fill 1.3→1.05.
+
+QA: putaran 1 NO-GO (pencahayaan/background belum lolos + 2 regresi:
+background f1500 memudar, matahari f2300 ketutup menara), putaran 2 GO.
+Render: 4 lane Colab T4 (akun 1–4, masing-masing ~648 frame, 0.13–0.16
+dtk/frame, total ~6 menit; Kaggle TIDAK dipakai — mati). Output:
+`ships-3d-v3.mp4` (86.4 dtk, 1080×1920, 72 MB). Verdict 10 frame lawan
+v2: **v3 menang 4 (f300, f465, f1900, f2300), seri 6, v2 menang 0.**
+
+Catatan jujur: f1140 overlap hilang (BOSPORUS + caption dua-duanya kebaca
+utuh, tanpa tabrakan glif — me baca sendiri dari file jadi) TAPI clearance
+praktis NOL, caption menempel tepat di tepi bawah bilah biru; garis rute
+masih menyentuh angka "1" di "10 km" (pre-existing). Lereng bawah f465
+masih ~40% frame (sekarang bertekstur). Muka prajurit masih kalah ekspresi
+dari v2 (mata titik, tanpa alis — alis butuh tekstur muka di main.js, di
+luar aturan ships.js saja).
+
 ## Catatan yang diketahui (bukan blocker)
 
-- Map card (f1140): grafik peta sudah diperbaiki (lihat Upgrade v2 di atas).
-  Clearance akhir caption bakar "dari pesisir Bosporus" terhadap label
-  "BOSPORUS" baru bisa dibuktikan dari video render, bukan dari still.
-- f2300: sisa strip bayangan tipis di tepi kanan terjauh — cek ulang di grade
-  GPU Colab (perilaku shadow-map bisa bergeser dari SwiftShader).
-- Stills bukti v2: `ships-stills/` (hook-2.5s, aerial-10s, guards-50s,
-  consequence-76s; yang lama: title 8 dtk, map 38 dtk, poll 83 dtk).
+- Map card (f1140): TERBUKTI dari video render v3 — overlap hilang
+  (BOSPORUS + caption "dari pesisir Bosporus" dua-duanya kebaca utuh, tanpa
+  tabrakan glif), tapi clearance praktis NOL: caption menempel tepat di
+  tepi bawah bilah biru. Garis rute masih menyentuh angka "1" di "10 km"
+  (pre-existing, sama seperti 3D v2).
+- f2300: matahari sudah utuh di tengah langit (discOv, v3); strip bayangan
+  tipis di tepi kanan terjauh tidak lagi jadi catatan di grade GPU Colab.
+- Stills bukti v3: `ships-stills/` (tambah di update ini bila ada); QA:
+  `qa-v3/QA-v3.md` (NO-GO) dan `qa-v3r2/QA-v3r2.md` (GO) — tidak di-commit
+  ke repo (artefak kerja lokal).

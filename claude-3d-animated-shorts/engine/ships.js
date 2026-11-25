@@ -63,8 +63,8 @@ const backOut = x => { x = Math.min(1, Math.max(0, x)); const c = 1.7; return 1 
 
 // ---------- module state (set by buildShipsFilm) ----------
 let C = null; // ctx from main.js
-let skyU = null, cloudsG = null, sunDisc = null, fill = null;
-let leadShip = null, fleetHull = null, fleetMast = null, fleetSail = null, fleet = [];
+let skyU = null, cloudsG = null, sunDisc = null, fill = null, snapKey = null;
+let leadShip = null, fleetHull = null, fleetMast = null, fleetSail = null, fleetFlag = null, fleetWake = null, fleet = [];
 let oxenG = null, oxen = [], torchesG = null, dustG = null, dust = [], chestG = null, ropeG = null, ropes = [];
 let sultan = null, advisor = null, workers = [], guards = [];
 const SHIPCAST = []; const prevVisible = new Set();
@@ -106,7 +106,7 @@ const smoothRamp = () => {
 // backlight, +90 = screen right; el = elevation). The sun is set per shot in cam() below.
 // lift is the v2 shade.ts lift: a blue floor added by the grade so shaded faces never go black.
 const SHIP_LOOKS = {
-  shipsDay: { exp: 1.0, sat: 1.12, warm: 0.02, teal: 0.0, con: 1.05, sun: '#fff3e0', si: 3.0, hemi: 0.8, dir: new THREE.Vector3(-0.45, 0.8, 0.45), mul: [1.0, 1.0, 1.0], fog: '#cfe6fa', rim: '#ffffff', skyTop: '#3d8fd1', skyHor: '#cfe6fa', fogNear: 110, fogFar: 700, az: 75, el: 48, lift: [0.025, 0.028, 0.045] },
+  shipsDay: { exp: 1.0, sat: 1.12, warm: 0.05, teal: 0.0, con: 1.05, sun: '#fff3e0', si: 3.0, hemi: 0.8, dir: new THREE.Vector3(-0.45, 0.8, 0.45), mul: [1.0, 1.0, 1.0], fog: '#d3deeb', rim: '#ffffff', skyTop: '#3d8fd1', skyHor: '#d8e2ee', fogNear: 110, fogFar: 700, az: 75, el: 48, lift: [0.025, 0.028, 0.045] },
   shipsGold: { exp: 1.05, sat: 1.18, warm: 0.26, teal: 0.45, con: 1.08, sun: '#ffab5e', si: 4.5, hemi: 0.7, dir: new THREE.Vector3(-0.6, 0.32, 0.45), mul: [1.1, 0.96, 0.78], fog: '#f0c184', rim: '#ffb36b', skyTop: '#6a5a9e', skyHor: '#ffbe78', fogNear: 90, fogFar: 600, az: 6, el: 3, lift: [0.07, 0.07, 0.12] },
   shipsNight: { exp: 0.95, sat: 1.0, warm: 0.03, teal: 0.3, con: 1.12, sun: '#8fa8e8', si: 1.6, hemi: 1.2, dir: new THREE.Vector3(-0.45, 0.7, 0.4), mul: [0.75, 0.8, 1.0], fog: '#141c33', rim: '#8fb0ff', skyTop: '#0a0f2e', skyHor: '#233258', fogNear: 120, fogFar: 700, az: 120, el: 35, lift: [0.13, 0.13, 0.2] },
 };
@@ -120,8 +120,8 @@ function lookSetup(name) {
   cloudsG.visible = name === 'shipsDay'; // night: no clouds; golden: the sun disc is the sky feature
   C.setLift(L.lift);
   sunDisc.visible = name === 'shipsGold';
-  fill.intensity = name === 'shipsNight' ? 1.3 : name === 'shipsGold' ? 0.85 : 0; // night 1.3 / gold 0.85 (was 1.1 / 0.5): the camera-facing hill in f75/f2300 was reading near-black; the on-axis fill is the lever that lights it without touching the sun
-  fill.color.set(name === 'shipsGold' ? '#ffb36b' : '#8fa8e8'); // gold: warm camera-side fill so the city keeps detail against the sunset (was night-only)
+  fill.intensity = name === 'shipsNight' ? 1.05 : name === 'shipsGold' ? 0.85 : 0.35; // v3r2: night 1.3 -> 1.05 — the flat on-axis fill was the main thing bleaching the far city towers white at night (moon + hemi + lift still light them, so they keep their blue-grey, just deeper). The near action keeps its warm torch light, so hull/workers are unaffected. v3: day 0 -> 0.35 — the on-axis fill was day-off, so camera-facing faces (guards, workers) got only the back/side sun and read flat; 0.35 lifts them without washing the day grade
+  fill.color.set(name === 'shipsGold' ? '#ffb36b' : name === 'shipsNight' ? '#8fa8e8' : '#fff2dd'); // gold: warm camera-side fill so the city keeps detail against the sunset (was night-only)
   // golden: the low sun's hill shadow is a knife-edge for the shadow map; a bigger
   // normalBias stops the ground self-shadowing from striping (acne). 0.05 still left
   // fine diagonal acne stripes across the f230 hill (verified in a 3x crop) — 0.2.
@@ -142,9 +142,14 @@ function sunDirFor(azDeg, elDeg, pos, look) {
 // wall face with no direct sun and drops the towers' diagonal shadow bands across it.
 // az 140 puts the sun on the camera side: face sunlit, tower shadows fall behind the wall.
 let sunOv = null;
+// per-shot sun-DISC override (az/el), same lifecycle as sunOv, but moves ONLY the golden
+// sun disc, not the key light. Shot 11: the disc (az 6) sits half-behind the x=125 tower;
+// az 6 -> 3 pulls it ~70 px left at 540w, clear of the tower, without touching the
+// golden lighting that the fleet/city pass on.
+let discOv = null;
 function begin(lookName) {
   lookSetup(lookName);
-  sunOv = null;
+  sunOv = null; discOv = null; snapKey.visible = false;
   for (const c of prevVisible) { c.root.visible = false; C.SR.updateLimbs(c); }
   prevVisible.clear();
   torchesG.visible = false; oxenG.visible = false; ropeG.visible = false; dustG.visible = false; chestG.visible = false;
@@ -170,10 +175,14 @@ function poseFleet(t, showHorn, showBos, hideNear = 0) {
     fleetHull.setMatrixAt(i, _dummy.matrix);
     fleetMast.setMatrixAt(i, _dummy.matrix);
     fleetSail.setMatrixAt(i, _dummy.matrix);
+    fleetFlag.setMatrixAt(i, _dummy.matrix);
+    fleetWake.setMatrixAt(i, _dummy.matrix);
   }
   fleetHull.instanceMatrix.needsUpdate = true;
   fleetMast.instanceMatrix.needsUpdate = true;
   fleetSail.instanceMatrix.needsUpdate = true;
+  fleetFlag.instanceMatrix.needsUpdate = true;
+  fleetWake.instanceMatrix.needsUpdate = true;
 }
 function showOxen(sz) {
   oxenG.visible = true;
@@ -224,6 +233,13 @@ function buildSky() {
   // look. The moon (az 120) backlights the ship, so the camera-facing hull would read
   // near-black without it; v2's shade model gives the same faces a purple-blue floor.
   fill = new THREE.DirectionalLight('#8fa8e8', 0); fill.castShadow = false; C.scene.add(fill, fill.target);
+  // v3 snap key: a shadowless warm light parked on the camera side of the wall, on ONLY
+  // during the shot-8 guard CU (49-50.67 s, toggled in begin()/shot 8). The day sun
+  // (az 140 override) lights the wall face, but the guards' faces/steel caps sit in its
+  // shade side from this angle; this key models them from the camera direction.
+  snapKey = new THREE.DirectionalLight('#fff1d6', 1.1); snapKey.castShadow = false;
+  snapKey.position.set(14, 30, 60); snapKey.target.position.set(14.25, 18.5, WALL_Z);
+  snapKey.visible = false; C.scene.add(snapKey, snapKey.target);
   cloudsG = new THREE.Group(); C.scene.add(cloudsG);
   const cm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.92, fog: false });
   const r = rng(7);
@@ -334,6 +350,12 @@ function buildGround() {
     if (i < 90) { x = (r3() < 0.5 ? -1 : 1) * (8 + r3() * 150); z = -60 + r3() * 130; }
     else { x = (r3() < 0.5 ? -1 : 1) * (8 + r3() * 210); z = (r3() < 0.5 ? -1 : 1) * (10 + r3() * 45); }
     if (Math.abs(x - 8) < 3 && Math.abs(z + 47) < 3) continue;
+    // v3r2 (f2300): the bush at (27.6, 21.6) r1.69 sits 22 m from the shot-11 camera and
+    // covers the fleet's lower edge mid-frame; the two at (10.4/11.8, 64-66) sit on the
+    // beach right in front of the nearest hulls. Positions are rng-deterministic (verified
+    // by projecting the scatter through the shot-11 camera); the skip sits before the rr
+    // draw, so the rng stream — and every other shot's layout — is unchanged.
+    if ((x > 24 && x < 31 && z > 18 && z < 25) || (x > 8 && x < 14 && z > 62 && z < 68)) continue;
     const rr = 0.9 + r3() * 1.3;
     p3.set(x, hillY(z) + 0.05, z); s3.set(rr, rr * 0.65, rr); mm.compose(p3, q0, s3); bush.setMatrixAt(k++, mm);
   }
@@ -445,30 +467,36 @@ function buildWater() {
   }
   const foamT = canvasTex(256, 64, g => {
     g.clearRect(0, 0, 256, 64);
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 45; i++) { // v3 round 2: 45 sparse blobs (was 90) — the dense band read as a solid white strip under the chain
       g.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.5})`;
-      g.beginPath(); g.ellipse(Math.random() * 256, 16 + Math.random() * 32, 6 + Math.random() * 18, 2 + Math.random() * 4, 0, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(Math.random() * 256, 16 + Math.random() * 32, 4 + Math.random() * 10, 2 + Math.random() * 3, 0, 0, 7); g.fill();
     }
   }, 14, 1);
-  const foamM = new THREE.MeshBasicMaterial({ map: foamT, transparent: true, opacity: 0.8, depthWrite: false });
+  const foamM = new THREE.MeshBasicMaterial({ map: foamT, transparent: true, opacity: 0.3, depthWrite: false });
   for (const fz of [69.2, -69.2, 101.2]) { // foam where the water meets the beaches (groundY crosses 0 at |z| ~ 69); a band at |z| ~ 61 would sit under the hillside
-    const fm = new THREE.Mesh(new THREE.PlaneGeometry(800, 3.5), foamM);
+    const fm = new THREE.Mesh(new THREE.PlaneGeometry(800, 1.6), foamM);
     fm.rotation.x = -Math.PI / 2; fm.position.set(0, 0.15, fz); C.scene.add(fm);
   }
 }
 function buildCity() {
-  const stone = C.SR.toon('#c9bcaa', { rim: 0.3, kick: 0.1 });
-  const cope = C.SR.toon('#e6dccd', { rim: 0.3, kick: 0.1 });
-  const domeM = C.SR.toon('#8a8f96', { rim: 0.4, kick: 0.2 });
-  const houseM = C.SR.toon('#d8c9a8', { rim: 0.3, kick: 0.1 });
+  // v3r2: all city stone darkened ~10% (stone was #c9bcaa, dome #8a8f96, house #d8c9a8).
+  // Two reasons: (1) DAY f1500 — the dome/minaret, front-lit by the az-140 snap sun +
+  // snapKey + fill, blew out to near-white ghosts against the pale sky, far paler than
+  // 3D v2; (2) NIGHT f75/f1225 — under the flat 1.3 night fill the same pale stone read
+  // as flat white cutouts with no depth, unlike Remotion v2's hazy blue-grey skyline.
+  // The curtain wall keeps its own brick material; the towers get brick below.
+  const stone = C.SR.toon('#b3a58d', { rim: 0.3, kick: 0.1 });
+  const cope = C.SR.toon('#d6cbb2', { rim: 0.3, kick: 0.1 });
+  const domeM = C.SR.toon('#7b808a', { rim: 0.4, kick: 0.2 });
+  const houseM = C.SR.toon('#c2b18c', { rim: 0.3, kick: 0.1 });
   const roofM = C.SR.toon('#96604c', { rim: 0.4, kick: 0.1 }); // muted + smaller cones: the bright orange triangles read as flat shapes behind the wall
   const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-  const wall = [], cop = [], dome = [], house = [], roof = [];
+  const wall = [], cop = [], dome = [], house = [], roof = [], tower = [];
   // curtain wall: its own mesh with a real brick texture. The merged wall's BoxGeometry
   // UVs are 0..1 per face, so a texture on the merged material would stretch; a
   // separate mesh lets the repeat match the front face (0.5 m bricks, 0.3 m courses).
   // Towers/domes stay in the merged stone mesh (their cylindrical UVs would shred the brick tile).
-  const brickTex = canvasTex(512, 256, g => {
+  const brickDraw = g => {
     g.fillStyle = '#a89a86'; g.fillRect(0, 0, 512, 256); // mortar
     const r = rng(1453), tones = ['#c9b8a0', '#bfae96', '#d3c4ab', '#b3a28c', '#c4b49c', '#c0ac90'];
     const bh = 16, bw = 64;
@@ -481,22 +509,58 @@ function buildCity() {
         g.fillRect(col * bw + off + 1.5, row * bh + 1.5, bw - 3, 2);
       }
     }
-  }, 75, 2.5);
+  };
+  const brickTex = canvasTex(512, 256, brickDraw, 75, 2.5);
   const brickM = C.SR.toon('#ffffff', { map: brickTex, rim: 0.25, kick: 0.1 });
   brickM.gradientMap = smoothRamp();
+  // v3r2 (night city): the towers were plain stone — next to the brick curtain wall they
+  // read as flat pale cutouts. Same brick tile, repeat (6,6): ~0.46 m bricks around a
+  // 7 m tower, ~0.25 m courses. Minaret shafts and dome drums stay plain stone (brick
+  // would stripe the thin shafts); the brick variation is what breaks the cutout flatness.
+  const towerBrickTex = canvasTex(512, 256, brickDraw, 6, 6);
+  const towerBrickM = C.SR.toon('#ffffff', { map: towerBrickTex, rim: 0.25, kick: 0.1 });
+  towerBrickM.gradientMap = smoothRamp();
   const curtain = new THREE.Mesh(box(300, 12, 4), brickM);
   curtain.position.set(0, D0 + 6, WALL_Z); curtain.castShadow = true; curtain.receiveShadow = true;
   C.scene.add(curtain);
+  // v3 diagonal tower-shadow wash (Remotion v2: one big soft diagonal shadow falls across
+  // the lower-right of the wall; ours was flat sunlit brick). MEASURED, three attempts:
+  // (1) gradient-alpha map: max alpha 0.85 darkened the wall by only ~8-17/255 and the
+  // pattern landed mirrored (the plane is viewed from its back side); (2) alphaMap: no
+  // measurable effect at all; (3) CONTROL — uniform opacity 0.5, no texture: wall dropped
+  // ~35 points, exactly as designed (the rest is ACES compressing the darks back up).
+  // So the shadow is built from two nested uniform-opacity quads. MIRROR NOTE: the snap
+  // camera looks along +z, so screen-right is world -x — a quad drawn at world x>14
+  // appears on the LEFT of the frame (round 2's first try landed the shadow on the
+  // wrong side, verified in the still). The quads below are therefore mirrored about
+  // x=14.25 (world x -> 28.5-x): the diagonal edge runs from (13.3,18) at the parapet
+  // slanting down-right to (9.1,6), putting the shadow over the lower-RIGHT like v2.
+  // The outer quad gives a soft stepped edge, and both run to x=-121.5 (the wall's left
+  // end) so no vertical edge is visible in any shot. Top edge at y=18 = the guards'
+  // feet: the guards themselves (y>18) are never darkened. DoubleSide is still
+  // required (the camera sits on the plane's -z side; FrontSide culls it entirely).
+  const shadeQuad = (pts, o) => {
+    const s = new THREE.Shape();
+    pts.forEach(([x, y], i) => { const lx = x - 14, ly = y - (D0 + 6); if (i === 0) s.moveTo(lx, ly); else s.lineTo(lx, ly); });
+    s.closePath();
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(s),
+      new THREE.MeshBasicMaterial({ color: '#241a3e', transparent: true, opacity: o, depthWrite: false, side: THREE.DoubleSide }));
+    m.position.set(14, D0 + 6, WALL_Z - 2.3); C.scene.add(m);
+  };
+  shadeQuad([[16.5, 18], [-121.5, 18], [-121.5, 6], [-1.5, 6]], 0.3);
+  shadeQuad([[13.3, 18], [-121.5, 18], [-121.5, 6], [9.1, 6]], 0.32);
   // (curtain wall box removed from the merged `wall` array below)
   let mi = 0;
   for (let x = -147; x <= 147; x += 3) { if (mi++ % 7 === 3) continue; cop.push([box(1.5, 1, 4), M4(x + 0.75, D0 + 12.5, WALL_Z)]); }
-  // towers: heights [18,22,18,26,18,22,18,30,18,22,18,26,18]; >=26 dome caps, rest cones
+  // towers: heights [18,22,18,26,18,22,18,30,18,22,18,26,18]; >=26 dome caps, rest cones.
+  // Shafts + cones are their own mesh with the tower brick material (see above); the
+  // >=26 dome caps stay in `dome` (domeM), like the city domes.
   const TOWER_H = [18, 22, 18, 26, 18, 22, 18, 30, 18, 22, 18, 26, 18];
   for (let i = 0; i < TOWER_H.length; i++) {
     const x = -150 + i * 25, h = TOWER_H[i];
-    wall.push([new THREE.CylinderGeometry(3.5, 4, h, 12), M4(x, D0 + h / 2, WALL_Z)]);
+    tower.push([new THREE.CylinderGeometry(3.5, 4, h, 12), M4(x, D0 + h / 2, WALL_Z)]);
     if (h >= 26) dome.push([new THREE.SphereGeometry(4.2, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M4(x, D0 + h, WALL_Z)]);
-    else wall.push([new THREE.ConeGeometry(4.2, 3, 8), M4(x, D0 + h + 1.5, WALL_Z)]);
+    else tower.push([new THREE.ConeGeometry(4.2, 3, 8), M4(x, D0 + h + 1.5, WALL_Z)]);
   }
   // chain anchor blocks at the Horn mouth
   for (const s of [-1, 1]) wall.push([box(4, D0 + 1.5, 4), M4(s * 90, (D0 + 1) / 2 - 0.25, CHAIN_Z)]);
@@ -517,7 +581,7 @@ function buildCity() {
     wall.push([new THREE.CylinderGeometry(0.7, 0.9, mh, 10), M4(x, D0 + mh / 2, z)]);
     dome.push([new THREE.ConeGeometry(1.1, 3.5, 8), M4(x, D0 + mh + 1.75, z)]);
   }
-  C.scene.add(merged(wall, stone), merged(cop, cope), merged(dome, domeM), merged(house, houseM), merged(roof, roofM));
+  C.scene.add(merged(wall, stone), merged(tower, towerBrickM), merged(cop, cope), merged(dome, domeM), merged(house, houseM), merged(roof, roofM));
 }
 function buildRoadAndChain() {
   const woodM = C.SR.toon('#7a5a38', { rim: 0.3, kick: 0.1 });
@@ -532,18 +596,30 @@ function buildRoadAndChain() {
   { const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
     for (let j = 0; j < 58; j++) { const z = -57 + j * 2; sleeper.setMatrixAt(j, m4.compose(new THREE.Vector3(0, hillY(z) + 0.06, z), q0, one)); } }
   sleeper.instanceMatrix.needsUpdate = true; sleeper.castShadow = true; sleeper.receiveShadow = true; C.scene.add(sleeper);
-  // the great chain: interlocking links every 0.42 m along the Horn mouth (v2 Strand: h=0.5,
+  // the great chain: interlocking links along the Horn mouth (v2 Strand: h=0.5,
   // link 0.69 x 0.425 m, pitch 0.45 m, ~400 links), alternating ring plane, warm grey #8c847c.
-  // v2 fix: thicker tube + darker iron + stronger rim/kick + tighter pitch so consecutive
-  // rings overlap and read as interlocked iron, not separate beads on a line.
-  const iron = C.SR.toon('#7d7468', { rim: 0.8, kick: 0.5 });
+  // v3 (f465: the old rings read as pale donuts floating on the white foam strip):
+  // - links are flat OVALS now, not round: torus 0.19/0.045 (was 0.17/0.06 — the tube was
+  //   35% of the radius, pure donut), scaled 1.5 x 0.72 so each link is 0.57 m long along
+  //   the chain and only 0.27 m tall/wide — like the Remotion v2 chain, which is drawn
+  //   as flat interlocked ovals lying on the water;
+  // - pitch 0.36 (was 0.42): link length 0.57 vs pitch 0.36, so consecutive rings overlap
+  //   hard and read as interlocked, not beads on a line;
+  // - darker iron #5c5346 + stronger rim/kick (was pale #7d7468, which blew out to beige
+  //   in the day sun); centre y 0.10 (was 0.30): the standing links' bottoms sit at
+  //   y ~ -0.08, i.e. the chain floats IN the water, half-submerged, not above it;
+  // - the foam band under it is softened (opacity 0.45, 2.2 m wide, in buildWater) so it
+  //   no longer reads as a white strip the chain sits on.
+  // CHAIN_Z stays 70 (see the geography comment at the top): at 62 the chain was buried
+  // in the hillside and every chain CU shot from under the hill.
+  const iron = C.SR.toon('#5c5346', { rim: 0.9, kick: 0.6 });
   const parts = [];
-  const linkG = new THREE.TorusGeometry(0.17, 0.06, 8, 14);
-  for (let j = 0; j < 430; j++) {
-    const x = -90 + j * 0.42, y = 0.3 + 0.15 * Math.pow(x / 90, 2);
+  const linkG = new THREE.TorusGeometry(0.19, 0.045, 8, 16);
+  for (let j = 0; j < 500; j++) {
+    const x = -90 + j * 0.36, y = 0.10 + 0.12 * Math.pow(x / 90, 2);
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, CHAIN_Z),
-      new THREE.Quaternion().setFromEuler(new THREE.Euler(j % 2 ? Math.PI / 2 : 0, 0, j % 2 ? 0 : Math.PI / 2)),
-      new THREE.Vector3(1.62, 1, 1));
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(j % 2 ? Math.PI / 2 : 0, 0, 0)),
+      new THREE.Vector3(1.5, 0.72, 1));
     parts.push([linkG, m]);
   }
   C.scene.add(merged(parts, iron));
@@ -659,16 +735,46 @@ function buildShips() {
   const woodM = C.SR.toon('#8a6a45', { rim: 0.3, kick: 0.1 });
   const fleetSailM = C.SR.toon('#f2e8d0', { rim: 0.2, kick: 0, side: THREE.DoubleSide });
   const mastG = new THREE.CylinderGeometry(0.12, 0.18, 8, 8); mastG.translate(0, 4, 0);
-  const sailG = new THREE.CylinderGeometry(0.16, 0.26, 3.4, 8); sailG.rotateZ(Math.PI / 2); sailG.translate(0, 8.5, 0);
+  // v3 (f2300: the furled sail read as a hairline bar): radius 0.30/0.42 x 4.2 m long
+  // (was 0.16/0.26 x 3.4) — a thick cream bundle across the masthead, readable at 90 m.
+  const sailG = new THREE.CylinderGeometry(0.30, 0.42, 4.2, 8); sailG.rotateZ(Math.PI / 2); sailG.translate(0, 8.5, 0);
+  // v3: red flag on every fleet ship (the lead ship has one; the fleet had none — at the
+  // consequence distance the masts were bare sticks). Plane 1.6 x 1.0 m at the masthead,
+  // offset +x so it flies off the mast like the lead ship's flag.
+  const flagG = new THREE.PlaneGeometry(1.6, 1.0); flagG.translate(0.8, 8.5, 0.5);
+  const flagM = C.SR.toon('#d8382e', { rim: 0.3, kick: 0, side: THREE.DoubleSide });
+  // v3: soft wake/foam ellipse at each hull's waterline (hull 11 m long, 3.2 m wide; the
+  // ellipse is 6.8 x 15 m, centred 1.5 m aft of the stern, so a white halo peeks out
+  // around the hull and trails behind it). Radial-gradient alpha so it reads as foam,
+  // not a hard plate. Shares the fleet matrix (same poseFleet call), so it hides with
+  // its ship and bobs with it.
+  const wakeT = canvasTex(128, 128, g => {
+    const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    gr.addColorStop(0, 'rgba(255,255,255,0.85)'); gr.addColorStop(0.6, 'rgba(255,255,255,0.4)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  });
+  const wakeG = new THREE.CircleGeometry(1, 20); wakeG.rotateX(-Math.PI / 2); wakeG.scale(3.4, 1, 7.5); wakeG.translate(0, 0.18, -1.5);
   const inst = (g, m) => {
     const im = new THREE.InstancedMesh(g, m, FLEET_N);
     im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; C.scene.add(im); return im;
   };
-  fleetHull = inst(HULL_GEO, hullM); fleetMast = inst(mastG, woodM); fleetSail = inst(sailG, fleetSailM);
+  fleetHull = inst(HULL_GEO, hullM); fleetMast = inst(mastG, woodM); fleetSail = inst(sailG, fleetSailM); fleetFlag = inst(flagG, flagM);
+  fleetWake = new THREE.InstancedMesh(wakeG, new THREE.MeshBasicMaterial({ map: wakeT, transparent: true, opacity: 0.5, depthWrite: false }), FLEET_N);
+  fleetWake.castShadow = false; fleetWake.receiveShadow = false; fleetWake.frustumCulled = false; fleetWake.renderOrder = 2; C.scene.add(fleetWake);
   const r2 = rng(1453);
   for (let i = 0; i < HORN_N; i++) fleet.push({ x: (r2() * 2 - 1) * 70, z: 70 + r2() * 34, yaw: (r2() - 0.5) * 0.9, ph: r2() * Math.PI * 2, horn: true });
   const BOS_SPOTS = [[-14, -92], [-7, -88], [0, -90], [7, -86], [14, -92], [-10, -80], [4, -80], [10, -84]];
   for (let i = 0; i < BOS_N; i++) { const [bx, bz] = BOS_SPOTS[i]; fleet.push({ x: bx, z: bz, yaw: (r2() - 0.5) * 0.3, ph: r2() * Math.PI * 2, horn: false }); }
+  // v3: hull colour variation — 5 wood tints + a small lightness jitter per ship, via
+  // setColorAt (MeshToonMaterial honours instanceColor). The fleet read as 78 clones
+  // of one orange box; the tints break that up at distance without touching the lead ship.
+  const tints = ['#8a5f3c', '#77512f', '#9a6f45', '#6e4a2c', '#8f6a48'].map(h => new THREE.Color(h));
+  const r4 = rng(777);
+  for (let i = 0; i < FLEET_N; i++) {
+    const c = tints[Math.floor(r4() * tints.length)].clone();
+    c.offsetHSL(0, 0, (r4() - 0.5) * 0.06); fleetHull.setColorAt(i, c);
+  }
+  fleetHull.instanceColor.needsUpdate = true;
 }
 function buildOxenTorches() {
   const oxM = C.SR.toon('#a08055', { rim: 0.5, kick: 0.1 }); // lightened: oxen read as dark boxes at night
@@ -782,7 +888,9 @@ function turban(c, col = '#f4f1ea') {
   c.head.add(wrap, cap);
 }
 function steelCap(c) {
-  const r = 0.3, m = C.SR.toon('#8a8f96', { rim: 0.6, kick: 0.4, flat2: true });
+  // v3r2: #8a8f96 -> #6f757e — the pale grey cap dissolved into the bright sky behind the
+  // guards at 540w; the darker steel reads as a cap against both sky and wall.
+  const r = 0.3, m = C.SR.toon('#6f757e', { rim: 0.6, kick: 0.4, flat2: true });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(r * 1.08, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), m);
   dome.position.y = r * 0.28; dome.castShadow = true;
   const brim = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.35, r * 1.35, r * 0.07, 24), m);
@@ -821,9 +929,16 @@ function buildCast() {
   WJ.forEach((j, i) => {
     workers.push(reg(C.SR.build({ ...C.base, jacket: j, jacket2: darken(j, 0.7), style: 'tunic', details: ['buttons'], btn: '#6a3208', hat: 'cap', hatCol: '#e43a2a' }), 2 + i));
   });
-  // Byzantine guards: dark red jackets, steel caps, shock/nervous
+  // Byzantine guards: dark red jackets, steel caps, shock/nervous.
+  // v3r2 (f1500 at 540w): the white heads dissolved into the bright sky and the ring-eye
+  // pupils were ~1 px, so no face read at all. headCol '#e0aa6e' gives the guards the tan
+  // skin Remotion v2 has — the head now contrasts with the sky, and the white eye-rings
+  // of 'wide' read as eyes against it. Moods alternate 'wide' / 'shout': shout's solid
+  // ink eye-dots + big open red mouth are the largest features the engine's face set has,
+  // and a shouted alarm fits guards spotting 70 ships overnight. (Workers/sultan keep the
+  // default white heads — only the guards change.)
   for (let i = 0; i < 5; i++) {
-    const g = reg(C.SR.build({ ...C.base, jacket: '#7a1f1a', jacket2: '#5a1512', style: 'tunic', details: ['buttons', 'belt'], btn: '#d9c9a8', beltCol: '#2a1a12' }), 13 + i);
+    const g = reg(C.SR.build({ ...C.base, headCol: '#e0aa6e', jacket: '#7a1f1a', jacket2: '#5a1512', style: 'tunic', details: ['buttons', 'belt'], btn: '#d9c9a8', beltCol: '#2a1a12' }), 13 + i);
     steelCap(g); guards.push(g);
   }
 }
@@ -842,7 +957,8 @@ function buildShots() {
     C.SUNDIR.copy(sd);
     fill.position.set(...c.pos); fill.target.position.set(...c.look); // on-axis fill follows the camera
     if (sunDisc.visible) {
-      sunDisc.position.copy(C.camera.position).addScaledVector(sd, 1500);
+      const dd = discOv ? sunDirFor(discOv.az, discOv.el, c.pos, c.look) : sd;
+      sunDisc.position.copy(C.camera.position).addScaledVector(dd, 1500);
       sunDisc.lookAt(C.camera.position);
     }
   };
@@ -881,7 +997,7 @@ function buildShots() {
     poseLead(-20); poseFleet(t, false, true);
     let cc;
     if (t < 15.5) cc = { pos: [46, 62, -108], look: [-22, 7, 28], fov: zoomFov(40, pushK(t, 9.5, 0.0016)), roll: 0 }; // FIX f300: look-target shifted left (-x, which is screen-right for this camera: the ship sat at ~87% width) — ship now near centre; vertical geometry unchanged
-    else if (t < 18.6667) { cc = dolly([4, 11, 54], [0, 0.4, CHAIN_Z], pushK(t, 15.5, 0.0025), 30); dofAt(cc, [0, 0.6, CHAIN_Z]); } // above the hill (ground at z54 is y 8.2): chain + water + foam fill the frame, the near slope is real terrain now, not sky through a culled hillside
+    else if (t < 18.6667) { cc = dolly([3, 9.5, 57], [0, 0.3, CHAIN_Z], pushK(t, 15.5, 0.0025), 25); dofAt(cc, [0, 0.6, CHAIN_Z], 1.0); } // v3r2 f465: fov 30 -> 25 + camera 3 m closer/lower — the chain reads ~20% larger and the bottom ray now meets the beach at z~66 instead of grazing the near green slope at z~60, so the empty blurred-grass lower half shrinks to a thin strip. Camera still above the hill (ground at z57 is y 7.1, camera 9.5). dofAt f=1.0 (was 0.15): the near beach at 3-8 m was outside the 2.4 m focus band and blurred to a blank wash — the wider band keeps the sand's texture readable while the chain stays at focus.
     else cc = dolly([-14, 4, -112], [2, 1.5, -89], pushK(t, 18.6667, 0.002), 44, 0.03);
     cam(cc); C.setShadowR(t < 15.5 ? 60 : 10); finish();
   }, { look: 'shipsDay' });
@@ -965,29 +1081,29 @@ function buildShots() {
     // Merlons sit every 3 m (centres 6.75/12.75/15.75/18.75/21.75; 9.75 is the every-7th
     // skip) — the old middle guard at 12.5 stood dead behind the 12.75 merlon, and the
     // outer two (8, 17) were bisected by the frame edges at fov 40 / 22 m.
-    const gspots = [[8.25, 'wide'], [11.25, 'wide'], [14.25, 'pale'], [17.25, 'wide'], [20.25, 'pale']];
+    const gspots = [[8.25, 'wide'], [11.25, 'shout'], [14.25, 'wide'], [17.25, 'shout'], [20.25, 'wide']];
     if (t >= 49) gspots.forEach(([x, mood], k) => {
       const c = guards[k];
-      place(c, x, WALL_Z, Math.PI, D0 + 12); idle(c, t);
+      place(c, x, WALL_Z, Math.PI, D0 + 12); c.root.scale.setScalar(1.25); idle(c, t); // v3 round 2: scale 1.25 (was 0.8 from reg()) — the 12 m span fixes the framing, so the camera alone cannot make the guards bigger; scaling lifts them to ~2.2 m, the same guard/wall ratio as Remotion v2. Scale is set every frame here and reset to 0.8 in shot 9 (resetScene does not touch scale).
       if (k === 1) C.wave1(c, t);
       face(c, mood); use(c);
     });
     let cc;
     if (t < 49) cc = { pos: [42, 32, 28], look: [0, 2, 88], fov: zoomFov(46, pushK(t, 46, 0.0016)), roll: 0 };
-    else if (t < 50.6667) { sunOv = { az: 140, el: 45 }; cc = dolly([13, 22.5, 80], [14.25, 18.5, WALL_Z], pushK(t, 49, 0.0022), 46); dofAt(cc, [14.25, 18, WALL_Z], 0.35); } // FIX f1500: 30 m / y 22.5 / fov 46 (was 22 m / 20.5 / 40) — half-width at the wall ~7.2 m fits all 5 guards (span 12 m) with margin; sun az 140 (was 75) front-lights the wall face — the day sun came from behind the wall, so the face got no direct sun and the towers' diagonal shadow bands (19-30 m wide each, overlapping) made the lower 2/3 muddy dark. el 62 alone only narrowed the bands (verified in still-50 round 1: bands persisted). az 140 puts the sun on the camera side: the face gets direct sun (tan, bricks readable top to bottom) and the tower shadows fall behind the wall, out of frame. Contained to this 1.67 s branch by begin()'s reset.
-    else { cc = dolly([5, 11, 54], [0, -1, CHAIN_Z], pushK(t, 50.6667, 0.0025), 32); dofAt(cc, [0, 0.6, CHAIN_Z]); } // FIX 51.5: look y 0.5 -> -1 — camera pitches down ~3.5°, the top edge drops ~210 px and the intruding fleet hull (z ~85) clears the frame; chain moves up to ~mid-frame. Same above-the-hill chain reframe as shot 3 (old [5,2.8,50] was under the hillside)
+    else if (t < 50.6667) { sunOv = { az: 140, el: 45 }; snapKey.visible = true; fill.intensity = 0.15; cc = dolly([14.25, 20.5, 85], [14.25, 19.0, WALL_Z], pushK(t, 49, 0.0022), 54); dofAt(cc, [14.25, 18.5, WALL_Z], 5); } // v3r2 f1500: (a) the 0.35 band (8.75 m) blurred the dome/minaret at 55-70 m into pale ghosts — 3D v2's background is sharp, so f=5 widens the sharp band to ~117 m; nothing sits in front of the wall in this shot, so nothing is lost. (b) the on-axis day fill (0.35, new in v3) washed the background flat on top of the az-140 sun + snapKey — 0.15 here only (begin() resets it to 0.35 next frame); faces stay lit by the az-140 sun + snapKey.
+    else { cc = dolly([4, 9.5, 57], [0, -1, CHAIN_Z], pushK(t, 50.6667, 0.0025), 26); dofAt(cc, [0, 0.6, CHAIN_Z], 1.0); } // v3r2: same chain reframe as shot 3 (fov 32 -> 26, camera closer/lower); look y -1 kept — the narrower fov only drops the top edge further, so the fleet hull stays clear of the frame. dofAt f=1.0 as shot 3: the near beach keeps its sand texture instead of blurring blank.
     cam(cc); C.setShadowR(t < 49 ? 50 : 20); finish(); // snap CU shadowR 20 (was 12): the nearby towers sit just outside a ±12 m shadow frustum, so their diagonal shadows never landed on the wall
   }, { look: 'shipsDay' });
   // 9 — DEADPAN 52-61.67 s, day: chain CU -> ships behind the chain. 2 guards.
   shot(52, t => {
     begin('shipsDay');
     poseLead(-20); poseFleet(t, true, false, t < 56.6667 ? 82 : 0);
-    [[-3, 'wide'], [3, 'pale']].forEach(([x, mood], k) => {
+    [[-3, 'wide'], [3, 'shout']].forEach(([x, mood], k) => {
       const c = guards[k];
-      place(c, x, WALL_Z, Math.PI, D0 + 12); idle(c, t); face(c, mood); use(c);
+      place(c, x, WALL_Z, Math.PI, D0 + 12); c.root.scale.setScalar(0.8); idle(c, t); face(c, mood); use(c); // scale reset: shot 8's snap CU scales the guards to 1.25, resetScene does not touch scale
     });
     let cc;
-    if (t < 56.6667) { cc = dolly([3.5, 11, 54], [0, -1.1, CHAIN_Z], pushK(t, 52, 0.0025), 30); dofAt(cc, [0, 0.6, CHAIN_Z]); } // FIX 54: look y 0.4 -> -1.1, same ~3.5° pitch-down as shot 8's chain CU — the top-edge hull corner clears the frame. Same above-the-hill chain reframe as shot 3
+    if (t < 56.6667) { cc = dolly([3, 9.5, 57], [0, -1.1, CHAIN_Z], pushK(t, 52, 0.0025), 25); dofAt(cc, [0, 0.6, CHAIN_Z], 1.0); } // v3r2: same chain reframe as shot 3 (fov 30 -> 25); look y -1.1 kept — top edge drops further, fleet hull stays clear. dofAt f=1.0 as shot 3.
     else cc = dolly([0, 12, 48], [0, 1.5, 85], pushK(t, 56.6667, 0.002), 44); // old [0,6,48] was under the hillside (ground at z48 is y 10.3)
     cam(cc); C.setShadowR(14); finish();
   }, { look: 'shipsDay' });
@@ -1020,7 +1136,8 @@ function buildShots() {
   shot(75, t => {
     begin('shipsGold');
     poseLead(-20); poseFleet(t, true, false);
-    const cc = { pos: [38, 30, 0], look: [0, 8, 95], fov: zoomFov(44, pushK(t, 75, 0.0016)), roll: 0 }; // FIX f2300: lower (38->30) + closer (z -22->0), look raised (0->8): the near waterline lands ~70% down the frame (lower third), the hill band shrinks to ~30% (was ~45%), city + towers stay in frame, and the road crossing the foreground hill adds detail to the band
+    discOv = { az: 3, el: 3 }; // v3r2 f2300: the sun disc (az 6) sat half-behind the x=125 tower; az 3 pulls it ~70 px left at 540w, clear of the tower and nearer the frame centre like 3D v2. Disc only — the golden key light stays at az 6.
+    const cc = { pos: [37, 25, 2], look: [0, 6, 95], fov: zoomFov(44, pushK(t, 75, 0.0016)), roll: 0 }; // v3 f2300: lower (30->25) + closer (z 0->2, x 38->37), look lowered (8->6): sightline to the fleet drops ~1.5° so more hull side shows under the deck tops, city + towers stay in frame, near waterline stays in the lower third
     cam(cc); C.setShadowR(40); finish();
   }, { look: 'shipsGold' });
   // 12 — POLL 79.67-86.4 s, golden: same wide, dimmed. Poll card overlay.
