@@ -136,6 +136,7 @@ siang 25 Nov 2026, semuanya atas perintah Avres:
    dinding; scene twist malam benar-benar gelap; framing f614 dist 28.
    Patch engine: `roblox-shorts/engine-patches-v2/` (+ NOTE.md).
    File jadi `roblox-no-word-v2.mp4`.
+- **Cerita misteri 90 detik kedua (26 Nov 2026): `roblox-shorts/stories/clock-stops.py` — "In this town, every clock stops when I walk by." (33 beat, 225 kata, 93,7 dtk, 1080×1920).** Dibangun dari teardown per-frame 3 referensi (aturan R1–R17: hard cut, caption per-speaker, counter fisik jujur, twist identitas dua jalur, countdown berhenti sebelum 0). Menara jam 50 tahun membeku di 11:58; Maya penghitung (hijau, `af_bella`) — hitungannya jangkar teks "8TH TODAY", bukan hitungan fisik (penyimpangan R3/R5 yang didokumentasikan); buku log "JUN 14 — MISSING"; arloji saku hero 11:58 = rima visual menara; countdown 10/9/8 BERHENTI di 8 + lonceng sekali; bisikan penutup + hard cut ke hitam. Engine: `ClockTower` baru + `pocket_watch` + caption per-speaker (`CAPTION_COLORS`) + senja (`skyColor #F97316`) — patch di `roblox-shorts/engine-patches-clock-stops/` (+ NOTE.md). Render Colab T4 1 lane ~13–14 menit (~0,29 dtk/frame), 2810 frame, 0 insiden. File jadi `roblox-clock-stops.mp4`.
 4. **Dua dokumen Google Docs** — `docs/`: "Mark AI Guy — What-If Story
    Engine" (21.317 karakter: workflow klip 10 detik + end-frame continuity
    + naskah narator + paket upload) dan "Rick's Clips Master Prompt v3"
