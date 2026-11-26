@@ -175,3 +175,36 @@ dari README/metadata terverifikasi, bukan dari menjalankan kode.
   bisa diverifikasi ke screenshot analytics.
 - Riset ini tidak mencakup TikTok/X langsung (alat social tidak
   menjangkaunya) dan tidak mencakup bahasa selain Inggris/Indonesia.
+
+## Postingan Threads @elbiilll (26 Nov 2026) — Muse + GitHub rendering
+
+- Post: https://www.threads.com/@elbiilll/post/DgK7fo7Hw6z (25 Nov 2026,
+  653 tayangan, 70 suka). Teks: Muse bikin video yang sebelumnya 10–16
+  jam, sekarang ga sampai 1 jam; makasih buat yang saranin pakai GitHub
+  buat rendering.
+- Video yang dibuat: "Andhika Itera" — 60 dtk, vertikal 1080×1920, VO
+  Inggris, kisah nyata Andhika kuliah naik sepeda merah sampai wisuda.
+  Render 10 mesin paralel kelar 25 menit, semua frame lolos cek.
+- 3 skill yang dipakai author (dibagikan di balasan, diverifikasi
+  `git ls-remote` + API 26 Nov 2026):
+  1. `cartoon_3d_short` — mromidev/claude-animated-shorts — SUDAH kita
+     install 24 Nov (`local-cartoon-3d-short`). Validasi: orang lain
+     pakai jalur yang sama.
+  2. `motion_design` — LottieFiles/motion-design-skill (3.692★, MIT,
+     upd 26 Nov 2026) — prinsip motion design universal buat AI agent:
+     timing, easing, choreography, prinsip animasi Disney (diadaptasi
+     buat UI). BARU buat kita.
+  3. `remotion_best_practices` — remotion-dev/skills (8.018★, upd
+     26 Nov 2026) — skill resmi Remotion. BARU buat kita.
+- Pelajaran buat kita: (a) "GitHub buat rendering" = GitHub Actions
+  sebagai mesin render paralel (10 mesin, 25 menit) — jalur render
+  KETIGA yang belum pernah kita coba (selama ini Colab T4; Kaggle
+  mati). Catatan jujur: runner GitHub Actions gratis itu CPU (tanpa
+  GPU) + ada batas menit bulanan — belum terbukti buat engine three.js
+  kita; perlu test kecil sebelum klaim. (b) Motion-design skill bisa
+  nutup gap "grafik bosenin" (timing/easing/choreography) — kandidat
+  install. (c) Remotion best-practices resmi bisa jadi audit buat
+  pipeline Remotion kita (ships/bridge).
+- Batas: tanpa login hanya 1 rantai balasan yang terlihat (dari 25
+  komentar); media (2 video panorama) hanya dideskripsikan dari
+  tampilan, tidak diunduh/dianalisis frame-per-frame.
